@@ -1,10 +1,10 @@
-# Your Project Name
+# Net-JEPA
 
-- **Problem Statement Number** - 
-- **Problem Statement Title** - *(Must exactly match one of the 11 Samsung EnnovateX AX Hackathon Problem Statements)*
-- **Team name** - *(Same as Phase 1 Team name)*
-- **Team members (Names)** - *Member 1 Name*, *Member 2 Name*
-- **Institute/College Name** - *Name*, *Campus Name & Address (In case the institute has multiple campuses)*
+- **Problem Statement Number** - 2
+- **Problem Statement Title** - Context-Aware Flow Embeddings for Adaptive AI based Network Traffic Classification
+- **Team name** - FlowState
+- **Team members (Names)** - Archisman Dhar, Kritik Gupta
+- **Institute/College Name** - Indian Institute of Technology Kanpur
 - **Final Presentation Google Drive Link** - *Upload the PDF presentation for your final submission on Google Drive (It should be openly accessible and not behind any login wall)*
 - **Full Submission Demo Video Link** - *(Upload the Demo video on Youtube as a public or unlisted video and share the link. Google Drive uploads for video is not allowed.)*
 - **Setup & Result Reproducibility Video Link** - *(Upload the Demo video on Youtube as a public or unlisted video and share the link. Google Drive uploads for video is not allowed.)*
