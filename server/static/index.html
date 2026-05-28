@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Net-JEPA Live — Traffic Classifier</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0d1117;
+    --surface:  #161b22;
+    --border:   #30363d;
+    --text:     #c9d1d9;
+    --muted:    #8b949e;
+    --accent:   #58a6ff;
+    --green:    #3fb950;
+    --yellow:   #d29922;
+    --red:      #f85149;
+    --purple:   #bc8cff;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 13px;
+    min-height: 100vh;
+  }
+
+  /* ── Top bar ── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 24px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 16px; font-weight: 600; color: var(--accent); }
+  #status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted); flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  #status-dot.live { background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+  /* ── Stats strip ── */
+  #stats {
+    display: flex;
+    gap: 0;
+    padding: 0 24px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .stat-card {
+    padding: 10px 24px 10px 0;
+    margin-right: 24px;
+    border-right: 1px solid var(--border);
+  }
+  .stat-card:last-child { border-right: none; }
+  .stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .stat-value { font-size: 22px; font-weight: 700; color: var(--text); line-height: 1.2; }
+  .stat-value span { font-size: 11px; color: var(--muted); font-weight: 400; }
+
+  /* ── Table ── */
+  #table-wrap {
+    padding: 20px 24px;
+    overflow-x: auto;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead th {
+    text-align: left;
+    padding: 6px 10px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.2s;
+  }
+  tbody tr:hover { background: rgba(88,166,255,0.05); }
+  tbody tr.new-row { animation: fadeIn 0.35s ease; }
+
+  @keyframes fadeIn {
+    from { background: rgba(88,166,255,0.15); }
+    to   { background: transparent; }
+  }
+
+  td {
+    padding: 7px 10px;
+    vertical-align: middle;
+    white-space: nowrap;
+    color: var(--text);
+  }
+
+  td.flow-id  { color: var(--muted); font-family: monospace; font-size: 11px; }
+  td.endpoint { font-family: monospace; font-size: 11px; color: var(--muted); }
+  td.proto    { font-size: 10px; font-weight: 600; }
+  td.app-name { font-weight: 600; color: var(--accent); }
+  td.conf     { width: 120px; }
+  td.latency  { text-align: right; }
+  td.packets  { text-align: right; color: var(--muted); }
+
+  .conf-bar-wrap {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .conf-bar-bg {
+    flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;
+  }
+  .conf-bar-fill {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, var(--green), var(--accent));
+    transition: width 0.3s;
+  }
+  .conf-pct { font-size: 11px; color: var(--muted); min-width: 34px; text-align: right; }
+
+  .badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .badge-tcp  { background: rgba(63,185,80,0.15); color: var(--green); }
+  .badge-udp  { background: rgba(188,140,255,0.15); color: var(--purple); }
+
+  .lat-good   { color: var(--green); }
+  .lat-ok     { color: var(--yellow); }
+  .lat-slow   { color: var(--red); }
+
+  /* ── Empty state ── */
+  #empty {
+    text-align: center; padding: 60px 0; color: var(--muted);
+    font-size: 14px;
+  }
+  #empty svg { display: block; margin: 0 auto 12px; opacity: 0.3; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div id="status-dot"></div>
+  <h1>Net-JEPA &mdash; Live Traffic Classifier</h1>
+  <div style="margin-left:auto;color:var(--muted);font-size:11px" id="conn-label">Connecting…</div>
+</header>
+
+<div id="stats">
+  <div class="stat-card">
+    <div class="stat-label">Total Flows</div>
+    <div class="stat-value" id="s-flows">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Packets/sec</div>
+    <div class="stat-value" id="s-pps">—</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Avg Latency</div>
+    <div class="stat-value" id="s-lat">— <span>ms</span></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Top App</div>
+    <div class="stat-value" id="s-top" style="font-size:14px">—</div>
+  </div>
+</div>
+
+<div id="table-wrap">
+  <div id="empty">
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+      <polyline points="13 2 13 9 20 9"/>
+    </svg>
+    Waiting for flows…
+  </div>
+  <table id="flow-table" style="display:none">
+    <thead>
+      <tr>
+        <th>Flow</th>
+        <th>Source</th>
+        <th>Destination</th>
+        <th>Proto</th>
+        <th>App</th>
+        <th style="width:140px">Confidence</th>
+        <th style="text-align:right">Pkts</th>
+        <th style="text-align:right">Latency</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<script>
+const MAX_ROWS = 50;
+const tbody = document.getElementById('tbody');
+const table = document.getElementById('flow-table');
+const empty = document.getElementById('empty');
+const dot   = document.getElementById('status-dot');
+const connLabel = document.getElementById('conn-label');
+
+const sFlows = document.getElementById('s-flows');
+const sPps   = document.getElementById('s-pps');
+const sLat   = document.getElementById('s-lat');
+const sTop   = document.getElementById('s-top');
+
+let totalFlows = 0;
+let latSum = 0;
+const appCounts = {};
+
+function latClass(ms) {
+  if (ms < 10)  return 'lat-good';
+  if (ms < 50)  return 'lat-ok';
+  return 'lat-slow';
+}
+
+function addRow(ev) {
+  totalFlows = ev.total_flows || totalFlows + 1;
+  latSum += ev.latency_ms;
+  appCounts[ev.app] = (appCounts[ev.app] || 0) + 1;
+
+  // Stats strip
+  sFlows.textContent = totalFlows;
+  if (ev.pps !== null && ev.pps !== undefined) sPps.textContent = ev.pps;
+  sLat.innerHTML = (latSum / totalFlows).toFixed(1) + ' <span>ms</span>';
+  const topApp = Object.entries(appCounts).sort((a,b) => b[1]-a[1])[0];
+  sTop.textContent = topApp ? topApp[0] : '—';
+
+  // Table row
+  empty.style.display = 'none';
+  table.style.display = '';
+
+  const tr = document.createElement('tr');
+  tr.className = 'new-row';
+  const confPct = Math.round(ev.confidence * 100);
+  const lc = latClass(ev.latency_ms);
+  const protoBadge = ev.proto === 'TCP'
+    ? `<span class="badge badge-tcp">TCP</span>`
+    : `<span class="badge badge-udp">UDP</span>`;
+
+  tr.innerHTML = `
+    <td class="flow-id">${ev.flow_id}</td>
+    <td class="endpoint">${ev.src}</td>
+    <td class="endpoint">${ev.dst}</td>
+    <td class="proto">${protoBadge}</td>
+    <td class="app-name">${ev.app}</td>
+    <td class="conf">
+      <div class="conf-bar-wrap">
+        <div class="conf-bar-bg"><div class="conf-bar-fill" style="width:${confPct}%"></div></div>
+        <span class="conf-pct">${confPct}%</span>
+      </div>
+    </td>
+    <td class="packets">${ev.packets}</td>
+    <td class="latency ${lc}">${ev.latency_ms.toFixed(2)} ms</td>
+  `;
+
+  tbody.insertBefore(tr, tbody.firstChild);
+
+  // Cap table
+  while (tbody.children.length > MAX_ROWS) {
+    tbody.removeChild(tbody.lastChild);
+  }
+}
+
+// WebSocket
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+
+  ws.onopen = () => {
+    dot.classList.add('live');
+    connLabel.textContent = 'Live';
+  };
+
+  ws.onmessage = (e) => {
+    let ev;
+    try { ev = JSON.parse(e.data); } catch { return; }
+    if (ev.error) {
+      connLabel.textContent = 'Error: ' + ev.error;
+      dot.classList.remove('live');
+      return;
+    }
+    if (ev.done) {
+      connLabel.textContent = 'Replay complete';
+      dot.classList.remove('live');
+      return;
+    }
+    addRow(ev);
+  };
+
+  ws.onclose = () => {
+    dot.classList.remove('live');
+    connLabel.textContent = 'Disconnected — reconnecting…';
+    setTimeout(connect, 2000);
+  };
+
+  ws.onerror = () => ws.close();
+
+  // Keep-alive ping
+  setInterval(() => { if (ws.readyState === 1) ws.send('ping'); }, 15000);
+}
+
+connect();
+</script>
+</body>
+</html>
