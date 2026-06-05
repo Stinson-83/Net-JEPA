@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.joblib
+*.pt
+data/processed/
+checkpoints/
+eval_results/
+wandb/
+.env
+*.egg-info/
+dist/
+build/
