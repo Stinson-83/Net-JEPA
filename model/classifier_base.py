@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
@@ -12,13 +12,12 @@ class Prediction:
     label: str
     confidence: float
     embedding: Optional[np.ndarray]
+    category: str = field(default='unknown')
 
 
 class Classifier(ABC):
-    """Phase 4 swap point: swap RandomForest for Net-JEPA encoder + k-NN here."""
-
     @abstractmethod
-    def predict(self, feats) -> Prediction:
+    def predict(self, packets) -> Prediction:
         ...
 
     @abstractmethod
@@ -27,5 +26,5 @@ class Classifier(ABC):
 
     @classmethod
     @abstractmethod
-    def load(cls, path: str) -> "Classifier":
+    def load(cls, path: str) -> 'Classifier':
         ...

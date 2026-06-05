@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Net-JEPA Live — Traffic Classifier</title>
+<title>Net-JEPA — Live Traffic Classifier</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -18,6 +18,8 @@
     --yellow:   #d29922;
     --red:      #f85149;
     --purple:   #bc8cff;
+    --orange:   #e3b341;
+    --teal:     #39c5cf;
   }
 
   body {
@@ -38,6 +40,18 @@
     border-bottom: 1px solid var(--border);
   }
   header h1 { font-size: 16px; font-weight: 600; color: var(--accent); }
+
+  .model-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(88,166,255,0.15);
+    color: var(--accent);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
   #status-dot {
     width: 8px; height: 8px; border-radius: 50%;
     background: var(--muted); flex-shrink: 0;
@@ -52,6 +66,7 @@
     padding: 0 24px;
     background: var(--surface);
     border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
   }
   .stat-card {
     padding: 10px 24px 10px 0;
@@ -63,32 +78,43 @@
   .stat-value { font-size: 22px; font-weight: 700; color: var(--text); line-height: 1.2; }
   .stat-value span { font-size: 11px; color: var(--muted); font-weight: 400; }
 
-  /* ── Table ── */
-  #table-wrap {
-    padding: 20px 24px;
-    overflow-x: auto;
+  /* ── Category distribution bar ── */
+  #cat-bar-wrap {
+    padding: 10px 24px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
   }
+  #cat-bar-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); margin-bottom: 6px;
+  }
+  #cat-bar {
+    display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 1px;
+  }
+  .cat-seg {
+    height: 100%; border-radius: 2px; transition: flex 0.4s ease;
+  }
+  #cat-legend {
+    display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px;
+  }
+  .cat-legend-item {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 10px; color: var(--muted);
+  }
+  .cat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
+  /* ── Table ── */
+  #table-wrap { padding: 20px 24px; overflow-x: auto; }
+
+  table { width: 100%; border-collapse: collapse; }
 
   thead th {
-    text-align: left;
-    padding: 6px 10px;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--muted);
-    border-bottom: 1px solid var(--border);
-    white-space: nowrap;
+    text-align: left; padding: 6px 10px;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); border-bottom: 1px solid var(--border); white-space: nowrap;
   }
 
-  tbody tr {
-    border-bottom: 1px solid var(--border);
-    transition: background 0.2s;
-  }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.2s; }
   tbody tr:hover { background: rgba(88,166,255,0.05); }
   tbody tr.new-row { animation: fadeIn 0.35s ease; }
 
@@ -97,56 +123,41 @@
     to   { background: transparent; }
   }
 
-  td {
-    padding: 7px 10px;
-    vertical-align: middle;
-    white-space: nowrap;
-    color: var(--text);
-  }
-
+  td { padding: 7px 10px; vertical-align: middle; white-space: nowrap; color: var(--text); }
   td.flow-id  { color: var(--muted); font-family: monospace; font-size: 11px; }
   td.endpoint { font-family: monospace; font-size: 11px; color: var(--muted); }
   td.proto    { font-size: 10px; font-weight: 600; }
   td.app-name { font-weight: 600; color: var(--accent); }
-  td.conf     { width: 120px; }
+  td.cat-name { font-size: 11px; }
+  td.conf     { width: 130px; }
   td.latency  { text-align: right; }
   td.packets  { text-align: right; color: var(--muted); }
 
-  .conf-bar-wrap {
-    display: flex; align-items: center; gap: 6px;
-  }
-  .conf-bar-bg {
-    flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;
-  }
-  .conf-bar-fill {
-    height: 100%; border-radius: 3px;
-    background: linear-gradient(90deg, var(--green), var(--accent));
-    transition: width 0.3s;
-  }
-  .conf-pct { font-size: 11px; color: var(--muted); min-width: 34px; text-align: right; }
+  .conf-bar-wrap { display: flex; align-items: center; gap: 6px; }
+  .conf-bar-bg   { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .conf-bar-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--green), var(--accent)); transition: width 0.3s; }
+  .conf-pct      { font-size: 11px; color: var(--muted); min-width: 34px; text-align: right; }
 
-  .badge {
-    display: inline-block;
-    padding: 1px 6px;
-    border-radius: 4px;
-    font-size: 10px;
-    font-weight: 600;
-  }
-  .badge-tcp  { background: rgba(63,185,80,0.15); color: var(--green); }
+  .badge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+  .badge-tcp  { background: rgba(63,185,80,0.15);  color: var(--green);  }
   .badge-udp  { background: rgba(188,140,255,0.15); color: var(--purple); }
+  .badge-quic { background: rgba(57,197,207,0.15);  color: var(--teal);   }
 
-  .lat-good   { color: var(--green); }
-  .lat-ok     { color: var(--yellow); }
-  .lat-slow   { color: var(--red); }
+  .lat-good { color: var(--green);  }
+  .lat-ok   { color: var(--yellow); }
+  .lat-slow { color: var(--red);    }
 
-  /* ── Empty state ── */
+  /* ── Empty / error states ── */
   #empty {
-    text-align: center; padding: 60px 0; color: var(--muted);
-    font-size: 14px;
+    text-align: center; padding: 60px 0; color: var(--muted); font-size: 14px;
   }
   #empty svg { display: block; margin: 0 auto 12px; opacity: 0.3; }
+  #error-banner {
+    display: none; margin: 16px 24px; padding: 12px 16px;
+    background: rgba(248,81,73,0.1); border: 1px solid rgba(248,81,73,0.3);
+    border-radius: 6px; color: var(--red); font-size: 12px;
+  }
 
-  /* ── Scrollbar ── */
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: var(--bg); }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
@@ -157,6 +168,7 @@
 <header>
   <div id="status-dot"></div>
   <h1>Net-JEPA &mdash; Live Traffic Classifier</h1>
+  <span class="model-badge">Net-JEPA</span>
   <div style="margin-left:auto;color:var(--muted);font-size:11px" id="conn-label">Connecting…</div>
 </header>
 
@@ -177,7 +189,20 @@
     <div class="stat-label">Top App</div>
     <div class="stat-value" id="s-top" style="font-size:14px">—</div>
   </div>
+  <div class="stat-card">
+    <div class="stat-label">Top Category</div>
+    <div class="stat-value" id="s-cat" style="font-size:13px">—</div>
+  </div>
 </div>
+
+<!-- Category distribution bar -->
+<div id="cat-bar-wrap">
+  <div id="cat-bar-label">Category distribution</div>
+  <div id="cat-bar"></div>
+  <div id="cat-legend"></div>
+</div>
+
+<div id="error-banner" id="error-banner"></div>
 
 <div id="table-wrap">
   <div id="empty">
@@ -195,6 +220,7 @@
         <th>Destination</th>
         <th>Proto</th>
         <th>App</th>
+        <th>Category</th>
         <th style="width:140px">Confidence</th>
         <th style="text-align:right">Pkts</th>
         <th style="text-align:right">Latency</th>
@@ -206,57 +232,105 @@
 
 <script>
 const MAX_ROWS = 50;
-const tbody = document.getElementById('tbody');
-const table = document.getElementById('flow-table');
-const empty = document.getElementById('empty');
-const dot   = document.getElementById('status-dot');
+const tbody    = document.getElementById('tbody');
+const table    = document.getElementById('flow-table');
+const empty    = document.getElementById('empty');
+const dot      = document.getElementById('status-dot');
 const connLabel = document.getElementById('conn-label');
+const errBanner = document.getElementById('error-banner');
 
 const sFlows = document.getElementById('s-flows');
 const sPps   = document.getElementById('s-pps');
 const sLat   = document.getElementById('s-lat');
 const sTop   = document.getElementById('s-top');
+const sCat   = document.getElementById('s-cat');
+const catBar = document.getElementById('cat-bar');
+const catLeg = document.getElementById('cat-legend');
 
-let totalFlows = 0;
-let latSum = 0;
-const appCounts = {};
+let totalFlows = 0, latSum = 0;
+const appCounts = {}, catCounts = {};
+
+// Category → colour mapping
+const CAT_COLORS = {
+  'game_streaming':     '#f85149',
+  'live_streaming':     '#58a6ff',
+  'metaverse':          '#bc8cff',
+  'online_game':        '#3fb950',
+  'stored_streaming':   '#d29922',
+  'video_conferencing': '#39c5cf',
+  'unknown':            '#8b949e',
+};
+
+function catColor(cat) { return CAT_COLORS[cat] || '#8b949e'; }
 
 function latClass(ms) {
-  if (ms < 10)  return 'lat-good';
-  if (ms < 50)  return 'lat-ok';
+  if (ms < 10) return 'lat-good';
+  if (ms < 50) return 'lat-ok';
   return 'lat-slow';
+}
+
+function protoBadge(proto) {
+  const p = (proto || '').toUpperCase();
+  if (p === 'TCP') return `<span class="badge badge-tcp">TCP</span>`;
+  if (p === 'UDP') return `<span class="badge badge-udp">UDP</span>`;
+  return `<span class="badge badge-quic">${p}</span>`;
+}
+
+function updateCatBar() {
+  const total = Object.values(catCounts).reduce((a,b)=>a+b, 0);
+  if (!total) return;
+  catBar.innerHTML = '';
+  catLeg.innerHTML = '';
+  for (const [cat, cnt] of Object.entries(catCounts).sort((a,b)=>b[1]-a[1])) {
+    const pct = (cnt / total * 100).toFixed(1);
+    const seg = document.createElement('div');
+    seg.className = 'cat-seg';
+    seg.style.cssText = `flex:${cnt};background:${catColor(cat)};`;
+    seg.title = `${cat}: ${pct}%`;
+    catBar.appendChild(seg);
+
+    const li = document.createElement('div');
+    li.className = 'cat-legend-item';
+    li.innerHTML = `<div class="cat-dot" style="background:${catColor(cat)}"></div>${cat.replace(/_/g,' ')} <span style="margin-left:2px;color:#58a6ff">${pct}%</span>`;
+    catLeg.appendChild(li);
+  }
 }
 
 function addRow(ev) {
   totalFlows = ev.total_flows || totalFlows + 1;
   latSum += ev.latency_ms;
   appCounts[ev.app] = (appCounts[ev.app] || 0) + 1;
+  const cat = ev.category || 'unknown';
+  catCounts[cat] = (catCounts[cat] || 0) + 1;
 
   // Stats strip
   sFlows.textContent = totalFlows;
   if (ev.pps !== null && ev.pps !== undefined) sPps.textContent = ev.pps;
   sLat.innerHTML = (latSum / totalFlows).toFixed(1) + ' <span>ms</span>';
-  const topApp = Object.entries(appCounts).sort((a,b) => b[1]-a[1])[0];
-  sTop.textContent = topApp ? topApp[0] : '—';
+  const topApp = Object.entries(appCounts).sort((a,b)=>b[1]-a[1])[0];
+  if (topApp) sTop.textContent = topApp[0].replace(/_/g,' ');
+  const topCat = Object.entries(catCounts).sort((a,b)=>b[1]-a[1])[0];
+  if (topCat) sCat.textContent = topCat[0].replace(/_/g,' ');
+
+  updateCatBar();
 
   // Table row
   empty.style.display = 'none';
   table.style.display = '';
 
-  const tr = document.createElement('tr');
+  const tr  = document.createElement('tr');
   tr.className = 'new-row';
-  const confPct = Math.round(ev.confidence * 100);
-  const lc = latClass(ev.latency_ms);
-  const protoBadge = ev.proto === 'TCP'
-    ? `<span class="badge badge-tcp">TCP</span>`
-    : `<span class="badge badge-udp">UDP</span>`;
+  const confPct = Math.round((ev.confidence || 0) * 100);
+  const lc  = latClass(ev.latency_ms);
+  const catStyle = `color:${catColor(cat)}`;
 
   tr.innerHTML = `
     <td class="flow-id">${ev.flow_id}</td>
     <td class="endpoint">${ev.src}</td>
     <td class="endpoint">${ev.dst}</td>
-    <td class="proto">${protoBadge}</td>
-    <td class="app-name">${ev.app}</td>
+    <td class="proto">${protoBadge(ev.proto)}</td>
+    <td class="app-name">${(ev.app||'').replace(/_/g,' ')}</td>
+    <td class="cat-name" style="${catStyle}">${cat.replace(/_/g,' ')}</td>
     <td class="conf">
       <div class="conf-bar-wrap">
         <div class="conf-bar-bg"><div class="conf-bar-fill" style="width:${confPct}%"></div></div>
@@ -268,32 +342,31 @@ function addRow(ev) {
   `;
 
   tbody.insertBefore(tr, tbody.firstChild);
-
-  // Cap table
-  while (tbody.children.length > MAX_ROWS) {
-    tbody.removeChild(tbody.lastChild);
-  }
+  while (tbody.children.length > MAX_ROWS) tbody.removeChild(tbody.lastChild);
 }
 
-// WebSocket
 function connect() {
   const ws = new WebSocket(`ws://${location.host}/ws`);
 
   ws.onopen = () => {
     dot.classList.add('live');
     connLabel.textContent = 'Live';
+    errBanner.style.display = 'none';
   };
 
   ws.onmessage = (e) => {
     let ev;
     try { ev = JSON.parse(e.data); } catch { return; }
+
     if (ev.error) {
-      connLabel.textContent = 'Error: ' + ev.error;
+      errBanner.textContent = 'Error: ' + ev.error;
+      errBanner.style.display = 'block';
+      connLabel.textContent = 'Error';
       dot.classList.remove('live');
       return;
     }
     if (ev.done) {
-      connLabel.textContent = 'Replay complete';
+      connLabel.textContent = `Replay complete — ${totalFlows} flows classified`;
       dot.classList.remove('live');
       return;
     }
@@ -307,8 +380,6 @@ function connect() {
   };
 
   ws.onerror = () => ws.close();
-
-  // Keep-alive ping
   setInterval(() => { if (ws.readyState === 1) ws.send('ping'); }, 15000);
 }
 
