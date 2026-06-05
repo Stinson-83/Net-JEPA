@@ -1,287 +1,323 @@
-# Net-JEPA Live — Encrypted Traffic Classifier
+# Net-JEPA — Architecture & Workflow
 
-Real-time-looking encrypted traffic classifier built on packet **metadata only**
-(sizes, timing, direction, 5-tuple — never payload). A `.pcap` is replayed on its
-original timeline, grouped into flows, featurised, and classified live in a browser
-dashboard.
-
-The architecture has one clean swap point (`model/classifier_base.py`) so the
-RandomForest baseline can be replaced with the Net-JEPA encoder + k-NN in Phase 4
-without touching any pipeline or UI code.
+Net-JEPA is a Joint-Embedding Predictive Architecture for encrypted network traffic
+classification. It learns flow embeddings self-supervised (no labels during pretraining)
+and uses them to classify traffic into 15 application categories across 6 coarse groups.
 
 ---
 
-## Project layout
+## Repository Layout
 
 ```
-netjepa-live/
-├── requirements.txt
-├── capture/
-│   ├── base.py          — PacketRecord dataclass + PacketSource interface
-│   └── pcap_replay.py   — Scapy streaming replay with timeline pacing
-├── flows/
-│   ├── flow_table.py    — Bidirectional flow assembly, windowing, expiry
-│   └── features.py      — scalar_vector (10 stats) + per-packet sequence [64,3]
-├── model/
-│   ├── classifier_base.py   — Classifier / Prediction interface (Phase 4 swap point)
-│   ├── simple_baseline.py   — RandomForest implementation
-│   └── checkpoints/         — saved .joblib model files go here
-├── scripts/
-│   ├── gen_demo_pcap.py     — generate a synthetic demo.pcap for testing
-│   ├── train_synthetic.py   — train on synthetic data (no Kaggle download needed)
-│   ├── train_baseline.py    — train on real 5G Kaggle dataset
-│   └── run_demo.py          — Phase 2 CLI: replay → flows → classify → print
-└── server/
-    ├── app.py               — FastAPI + WebSocket server
-    └── static/index.html    — live dashboard (vanilla JS, no build step)
+Net-JEPA/
+│
+├── netjepa/                   ← core ML package
+│   ├── data/                  ← data pipeline
+│   ├── model/                 ← neural network components
+│   ├── loss/                  ← loss functions
+│   ├── training/              ← three training phases
+│   ├── downstream/            ← classification heads
+│   ├── evaluation/            ← metrics & diagnostics
+│   ├── utils/                 ← checkpoints, logging
+│   ├── configs/               ← YAML hyperparameters
+│   └── scripts/               ← CLI entry points
+│
+├── capture/                   ← live packet capture (pcap replay)
+├── flows/                     ← flow grouping for live server
+├── model/                     ← server-facing classifier adapter
+└── server/                    ← FastAPI + WebSocket dashboard
 ```
 
 ---
 
-## Quick start
+## Data Source
 
-### 1. Set up the environment
-
-```bash
-cd ~/projects/netjepa-live
-python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+```
+/indian-slp/Users/ug/ZEPA/Kritik/net_data/5G_Traffic_Datasets/
+  Game_Streaming/    GeForce_Now/, KT_GameBox/
+  Live_Streaming/    AfreecaTV/, Naver_NOW/, YouTube_Live/
+  Metaverse/         Roblox/, Zepeto/
+  Online_Game/       Battleground/, Teamfight_Tactics/
+  Stored_Streaming/  Amazon_Prime/, Netflix/, YouTube/
+  Video_Conferencing/ Google_Meet/, MS_Teams/, Zoom/
 ```
 
-### 2. Generate a synthetic demo pcap (no Wireshark needed)
+- **75 Wireshark CSV files** across 15 apps in 6 categories
+- Each CSV: `No., Time, Source, Destination, Protocol, Length, Info`
+- Time column: `"2022-06-17 23:48:34.871426"` (datetime string, converted to relative float)
+- Largest files: ~4.3M rows / 705 MB — capped at **500k rows per file** during parsing
 
-```bash
-python scripts/gen_demo_pcap.py --out demo.pcap
-# Options:
-#   --duration 90    simulated seconds of traffic (default: 90)
-#   --seed 42        random seed for reproducibility
+---
+
+## Preprocessing Pipeline — `netjepa/data/`
+
+```
+Raw CSVs
+   │
+   ▼  parser.py
+   Vectorized Info parsing (ports, TCP flags, TLS markers)
+   Datetime → relative float seconds  (explicit format, ~3s per 500k rows)
+   Protocol string → 4-class ID
+   │
+   ▼  flow_builder.py
+   Group into bidirectional flows via frozenset{(src_ip,port),(dst_ip,port)}
+   Split on 30s idle gap · discard <10 packets · truncate to 64 packets
+   │
+   ▼  rtt.py
+   RTT extraction: TCP handshake → TLS handshake → first exchange (fallback chain)
+   │
+   ▼  features.py  (two passes)
+   Pass 1: per-source-host statistics across all flows
+           (distinct dst IPs, ports, connections/sec)
+   Pass 2: per-flow feature extraction
+   │
+   ├─  packet_sequence  (64 × 9)
+   │     [size_norm, iat_log, signed_size, proto_onehot×4, rtt_norm, rtt_flag]
+   │
+   ├─  flow_context     (15,)
+   │     [protocol, duration, iat_mean, iat_std, syn/fin/rst ratios,
+   │      pkts/sec, host stats×4, pkt_count, rtt_norm, rtt_flag]
+   │
+   └─  padding_mask     (64,) bool — True = real packet
+   │
+   ▼  preprocess.py
+   Stratified 70/15/15 pretrain/downstream/test splits
+   Few-shot subsets: η ∈ {1, 3, 5, 7, 10} labelled samples per class
+   Output: data/processed/*.parquet + splits.json
 ```
 
-### 3. Train the model
+---
 
-**Option A — synthetic data (instant, no dataset download):**
-```bash
-python scripts/train_synthetic.py
-# saves to model/checkpoints/baseline.joblib
+## Model Architecture — `netjepa/model/`
+
+```
+┌─────────────────────────────── NetJEPA ───────────────────────────────┐
+│                                                                        │
+│  ONLINE BRANCH (receives DEGRADED flow)                                │
+│  ┌────────────────────────────────────────────────────┐               │
+│  │  TemporalEncoder                                   │               │
+│  │  Linear(9→128) + Sinusoidal PE                     │               │
+│  │  4× TransformerEncoderLayer (pre-norm)             │               │
+│  │  d=128, heads=4, ff=256, dropout=0.1               │               │
+│  │  → (B, 64, 128) per-packet latents                 │               │
+│  │                                                    │               │
+│  │  ContextEncoder  (always receives clean flow_ctx)  │               │
+│  │  Linear(15,64)→LN→LeakyReLU → Linear(64,64)→LN    │               │
+│  │  → (B, 64)                                         │               │
+│  │                                                    │               │
+│  │  CrossAttentionFusionA  (Direction A)              │               │
+│  │  Q = packet_latents,  K = V = context_expanded     │               │
+│  │  → (B, 64, 128) context-enriched tokens            │               │
+│  └────────────────────────────────────────────────────┘               │
+│             │                                                          │
+│             ▼  Adaptive Temporal Masking                               │
+│         visible tokens          masked positions                       │
+│             │                        │                                 │
+│             ▼                        ▼                                 │
+│  ┌──────────────────────────────────────────┐                         │
+│  │  MicroPredictor                          │                         │
+│  │  concat(visible, sinusoidal_PE[masked])  │                         │
+│  │  3× TransformerEncoderLayer              │                         │
+│  │  → (B, n_masked, 128) predictions        │                         │
+│  └──────────────────────────────────────────┘                         │
+│                                                                        │
+│  TARGET BRANCH (EMA, receives CLEAN flow, stop-gradient)              │
+│  ┌────────────────────────────────────────────────────┐               │
+│  │  EMA copies of TemporalEncoder + ContextEncoder    │               │
+│  │  + FusionA  (momentum 0.99 → 0.999 over 100 epochs)│               │
+│  │  → target_fused[:, masked_indices, :]              │               │
+│  └────────────────────────────────────────────────────┘               │
+│                                                                        │
+│  DOWNSTREAM BRANCH (Phase 3 only, frozen online encoder)              │
+│  ┌────────────────────────────────────────────────────┐               │
+│  │  DownstreamPoolingB  (Direction B)                 │               │
+│  │  Learnable query attends to all 64 packet latents  │               │
+│  │  → (B, 128) flow vector                            │               │
+│  │  concat with raw flow_context                      │               │
+│  │  → (B, 143) final embedding                        │               │
+│  └────────────────────────────────────────────────────┘               │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Option B — real 5G Kaggle dataset:**
-```bash
-# Download kimdaegyeom/5g-traffic-datasets from Kaggle
-# and place it at: datasets/5g-traffic/
+---
 
-python scripts/train_baseline.py --data-dir datasets/5g-traffic
-# Optional flags:
-#   --out model/checkpoints/baseline.joblib   (default)
-#   --explore                                 just print the directory structure and exit
+## Augmentation / Degradation — `netjepa/data/augment.py`
+
+Applied to the **online branch input only** (flow_ctx is always clean, except RTT masking):
+
+```
+Clean flow
+    │
+    ├─ Change RTT      p=0.8   scale all IATs by α ~ U(0.5, 1.5)
+    ├─ Time Shift      p=0.5   shift first-packet IAT by b ~ U(-1, +1) s
+    ├─ Packet Loss     p=0.5   drop all packets in a random 0.2 s window
+    └─ RTT Masking     p=0.4   zero out rtt_norm + rtt_valid in both
+                               packet_sequence[:,7:9] and flow_ctx[13:15]
+    │
+    ▼
+Degraded flow  →  online branch
 ```
 
-The training script auto-detects whether the dataset contains CSV files or raw `.pcap`
-files and adapts accordingly. CSV columns are matched by synonym (e.g. `flow duration`,
-`Flow Duration`, `duration` all map to the same feature).
+---
 
-### 4. Run the terminal demo (Phase 2)
+## Loss Functions — `netjepa/loss/`
 
-```bash
-python scripts/run_demo.py --pcap demo.pcap --model model/checkpoints/baseline.joblib
-# Optional flags:
-#   --speed 5.0    replay at 5× real time (useful for quick testing)
-#   --speed 0.5    replay at half speed (slow motion)
+```
+VICReg  (primary)
+  Invariance:  MSE(predicted, target)              weight α = 25
+  Variance:    ReLU(1 − std(predicted))            weight β = 25
+  Covariance:  off-diagonal² of cov matrix         weight γ = 1
+
+DBSCAN Contrastive  (starts epoch 20)
+  Pseudo-labels via DBSCAN on 2% embedding subsample every 10 epochs
+  Margin loss: push same-cluster closer, different-cluster apart (m = 0.5)
+
+CompositeLoss
+  Normalise each loss by its 100-step running mean (prevents scale dominance)
+  total = λ₁ · norm(VICReg) + λ₂ · norm(Contrastive)
+          λ₁ = 1.0              λ₂ = 0.3
 ```
 
-Output columns: `FlowID | App | Confidence | Packets | Latency(ms)`
+---
 
-### 5. Start the live dashboard (Phase 3)
+## Three-Phase Training — `netjepa/training/`
+
+```
+PHASE 1 — Self-supervised Pretraining  (150 epochs)
+  Dataset:   pretrain.parquet (70% of all flows, labels ignored)
+  Optimizer: AdamW lr=1e-3, CosineAnnealing, weight_decay=1e-4
+  Loop:
+    1. Degrade flow → online branch
+    2. Adaptive masking (30% if <30 real pkts, else 50%)
+    3. Online: fused_latents → predictor → predicted[masked]
+    4. Target (no_grad + detach): target_fused[masked]
+    5. VICReg loss on (predicted, target)
+    6. Epoch ≥20: DBSCAN refresh every 10 epochs → contrastive loss
+    7. EMA update: momentum 0.99 → 0.999 (linear over 100 epochs)
+  Checkpoints every 25 epochs + final
+
+PHASE 2 — Embedding Refinement  (50 epochs)
+  Loads Phase 1 checkpoint
+  Target encoder FROZEN (momentum fixed at 0.999, no EMA updates)
+  DBSCAN refresh every 5 epochs
+  Early-stop signal: silhouette score > 0.5
+
+PHASE 3 — Downstream Classification  (50 epochs)
+  Loads Phase 2 checkpoint
+  FREEZE: all encoders, fusion, EMA target
+  TRAIN:  DownstreamPoolingB + classifier heads
+
+  Three classifiers:
+    A. k-NN (k=5, cosine)     → knn.joblib  ← loaded by live server
+    B. Linear probe            Linear(143, 14)
+    C. Shallow MLP             Linear(143,64) → ReLU → Dropout → Linear(64,14)
+
+  Embedding = concat(flow_vec_128, flow_ctx_15) = 143-dim
+```
+
+---
+
+## Evaluation — `netjepa/evaluation/`
+
+| Module | Measures |
+|---|---|
+| `embedding.py` | Cosine sim distributions (intra > 0.7, inter < 0.3), silhouette score |
+| `classification.py` | Accuracy, macro F1/precision/recall, per-class F1, confusion matrix |
+| `topk_pairs.py` | Horowicz top-k pairs accuracy (augmented views stay close) |
+| `fewshot.py` | η ∈ {1,3,5,7,10} labels per class, 10 repeats, mean ± std accuracy |
+
+**KPIs:** intra cosine > 0.7 · inter cosine < 0.3 · accuracy ≥ 90% · few-shot η=7 ≥ 85% · CPU p95 < 100ms
+
+---
+
+## Live Inference Server — `server/` + `model/`
+
+```
+                        ┌──────────────────────────────────┐
+  .pcap file            │         server/app.py             │
+  (PCAP_PATH env)  ───► │   FastAPI + WebSocket fanout      │
+                        │                                   │
+  capture/              │   PcapReplay (pcap_replay.py)     │
+  pcap_replay.py   ───► │       │                           │
+                        │       ▼                           │
+  flows/                │   FlowTable (flow_table.py)       │
+  flow_table.py    ───► │   groups into 10-64 pkt flows     │
+                        │       │                           │
+  model/                │       ▼                           │
+  netjepa_          ───► NetJEPAClassifier.predict()        │
+  classifier.py         │       │                           │
+                        │   packets_to_tensors()            │
+  NETJEPA_CKPT     ───► │   PacketRecord → (64×9) tensor    │
+  KNN_PATH         ───► │       │                           │
+                        │   model.forward_downstream()      │
+                        │       │                           │
+                        │   knn.predict() → app + category  │
+                        │       │                           │
+                        │   JSON event over WebSocket        │
+                        └──────────────────────────────────┘
+                                      │
+                                      ▼
+                         server/static/index.html
+                         ┌──────────────────────────────┐
+                         │  Live dashboard               │
+                         │  • Status dot (live/error)    │
+                         │  • Stats: flows, pps,         │
+                         │    avg latency, top app/cat   │
+                         │  • Category distribution bar  │
+                         │  • Flow table: src, dst,      │
+                         │    proto, app, category,      │
+                         │    confidence bar, latency    │
+                         └──────────────────────────────┘
+```
+
+**Environment variables:**
+
+| Variable | Default | Description |
+|---|---|---|
+| `PCAP_PATH` | *(required)* | Path to .pcap file for replay |
+| `NETJEPA_CKPT` | `checkpoints/phase3/final.pt` | Trained NetJEPA checkpoint |
+| `KNN_PATH` | *(auto-detected)* | `knn.joblib` next to checkpoint |
+| `REPLAY_SPEED` | `1.0` | Replay speed multiplier |
+
+---
+
+## End-to-End Run Order
 
 ```bash
-# Environment variables configure the server (all optional):
-export PCAP_PATH=demo.pcap
-export MODEL_PATH=model/checkpoints/baseline.joblib
-export REPLAY_SPEED=1.0
+# 1. Preprocess (one-time, ~10-20 min for all 75 CSVs)
+python3 netjepa/scripts/preprocess_kaggle.py
 
+# 2. Phase 1 — self-supervised pretraining (~150 epochs, GPU recommended)
+python3 netjepa/scripts/train_phase1.py --device cuda
+
+# 3. Phase 2 — embedding refinement (~50 epochs)
+python3 netjepa/scripts/train_phase2.py \
+    --phase1_ckpt checkpoints/phase1/final.pt
+
+# 4. Phase 3 — classification heads; also saves knn.joblib
+python3 netjepa/scripts/train_phase3.py \
+    --phase2_ckpt checkpoints/phase2/final.pt
+
+# 5. Full evaluation against test split
+python3 netjepa/scripts/evaluate.py \
+    --checkpoint checkpoints/phase3/final.pt
+
+# 6. Live dashboard
+PCAP_PATH=capture.pcap \
+NETJEPA_CKPT=checkpoints/phase3/final.pt \
 uvicorn server.app:app --host 0.0.0.0 --port 8000
 ```
 
-Then open **http://localhost:8000** in a browser.
-
-One-liner (no export needed):
-```bash
-PCAP_PATH=demo.pcap MODEL_PATH=model/checkpoints/baseline.joblib REPLAY_SPEED=2 \
-  uvicorn server.app:app --port 8000
-```
-
 ---
 
-## Using a real pcap
+## Key Design Decisions
 
-Capture ~2 minutes of traffic with Wireshark (or `tcpdump`), save as `demo.pcap`,
-and drop it in the project root. No other changes are needed.
-
-```bash
-# tcpdump example (Linux/macOS, requires sudo):
-sudo tcpdump -i eth0 -w demo.pcap -G 120 -W 1
-
-# Then run:
-python scripts/run_demo.py --pcap demo.pcap --model model/checkpoints/baseline.joblib
-```
-
-The `local_ip` is auto-detected from the most frequent private-range IP in the first
-200 packets. To override it:
-
-```python
-# in scripts/run_demo.py or server/app.py:
-replay = PcapReplay("demo.pcap", speed=1.0, local_ip="192.168.1.10")
-```
-
----
-
-## Feature reference
-
-`flows/features.py` extracts a 10-element `scalar_vector` used by the baseline, plus a
-`sequence` array for the future Net-JEPA encoder.
-
-| Index | Name | Description |
-|-------|------|-------------|
-| 0 | `packet_count` | packets seen in this flow window |
-| 1 | `duration` | seconds from first to last packet |
-| 2 | `mean_pkt_size` | mean IP frame size (bytes) |
-| 3 | `std_pkt_size` | std dev of packet sizes |
-| 4 | `mean_iat` | mean inter-arrival time (s) |
-| 5 | `std_iat` | std dev of IAT — used as jitter proxy |
-| 6 | `bytes_up` | total bytes in outbound direction |
-| 7 | `bytes_down` | total bytes in inbound direction |
-| 8 | `up_down_ratio` | outbound / inbound packet count ratio |
-| 9 | `packet_rate` | packets per second |
-
-`sequence` shape `[64, 3]` = per-packet `[size, IAT, direction]`, zero-padded to 64
-packets. The baseline ignores this; the Net-JEPA encoder (Phase 4) consumes it.
-
-Constants (edit `flows/features.py` and `flows/flow_table.py` to change):
-- `MAX_PACKETS = 64` — sequence length cap
-- `MIN_PACKETS = 10` — minimum packets before a flow is emitted for classification
-- `IDLE_TIMEOUT = 15.0` — seconds of inactivity before a flow is flushed
-
----
-
-## How to swap the classifier (Phase 4)
-
-The only thing that needs replacing is `model/simple_baseline.py`. Everything else
-(capture, flows, features, server, UI) stays identical.
-
-### Steps
-
-1. Create `model/jepa_classifier.py` implementing the `Classifier` interface:
-
-```python
-from model.classifier_base import Classifier, Prediction
-from flows.features import FlowFeatures
-
-class JEPAClassifier(Classifier):
-    def predict(self, feats: FlowFeatures) -> Prediction:
-        # feats.sequence  shape [64, 3]  ← feed this to your encoder
-        # feats.scalar_vector  shape [10] ← optional auxiliary input
-        embedding = self.encoder(feats.sequence)       # your Net-JEPA encoder
-        label, conf = self.knn.query(embedding)        # k-NN lookup
-        return Prediction(label=label, confidence=conf, embedding=embedding)
-
-    def save(self, path): ...
-    @classmethod
-    def load(cls, path): ...
-```
-
-2. In `scripts/run_demo.py`, change the import and load line:
-
-```python
-# Before:
-from model.simple_baseline import RandomForestClassifierModel
-model = RandomForestClassifierModel.load(args.model)
-
-# After:
-from model.jepa_classifier import JEPAClassifier
-model = JEPAClassifier.load(args.model)
-```
-
-3. Do the same one-line change in `server/app.py`.
-
-That's it. The `Prediction.embedding` field is already wired through the event JSON
-(`embedding` is serialisable as a list) so the UI can optionally display it later.
-
----
-
-## How to add a new app class
-
-When training on real data, just include pcap or CSV files for the new app — the label
-is inferred from the filename (e.g. `TikTok_1.csv` → label `TikTok`). Retrain:
-
-```bash
-python scripts/train_baseline.py --data-dir datasets/5g-traffic
-```
-
-No code changes needed.
-
----
-
-## How to change replay speed
-
-**CLI:**
-```bash
-python scripts/run_demo.py --pcap demo.pcap --model model/checkpoints/baseline.joblib --speed 10
-```
-
-**Server:**
-```bash
-REPLAY_SPEED=10 uvicorn server.app:app
-```
-
-`speed=1.0` = real time. `speed=100` = 100× faster (useful for testing the full pcap quickly).
-
----
-
-## How to change the dashboard row limit or WebSocket port
-
-**Row limit** — edit the constant near the top of `server/static/index.html`:
-```js
-const MAX_ROWS = 50;   // change to whatever you want
-```
-
-**Port:**
-```bash
-uvicorn server.app:app --port 9000
-```
-
----
-
-## How to run on a different pcap / model without restarting
-
-The server reads `PCAP_PATH`, `MODEL_PATH`, and `REPLAY_SPEED` once at startup.
-To switch files, restart the server with updated env vars:
-
-```bash
-PCAP_PATH=capture2.pcap MODEL_PATH=model/checkpoints/jepa.joblib uvicorn server.app:app
-```
-
----
-
-## Troubleshooting
-
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| `Model not found` in browser | server started before training | run `train_synthetic.py` or `train_baseline.py` first |
-| `pcap not found` in browser | wrong `PCAP_PATH` | set `PCAP_PATH=path/to/your.pcap` |
-| No flows appear | pcap has no TCP/UDP/IP packets | verify with `tcpdump -r demo.pcap` |
-| All flows show same label | synthetic model trained on toy data | train on real Kaggle data |
-| Very high latency (>100ms) | machine under load or debug mode | use `uvicorn server.app:app` (not `--reload`) |
-| Dashboard blank after reload | replay finished | restart the server to replay again |
-
----
-
-## Roadmap
-
-| Phase | Status | Description |
-|-------|--------|-------------|
-| 1 | Done | Offline pipeline: FlowTable → features → RandomForest |
-| 2 | Done | Replay engine: pcap → live terminal output with latency |
-| 3 | Done | Dashboard: FastAPI + WebSocket + live browser UI |
-| 4 | Pending | Net-JEPA encoder + k-NN behind the same Classifier interface |
-| 5 | Pending | Docker image, README run instructions, embedding cluster viz |
+| Decision | Rationale |
+|---|---|
+| Degraded online / clean target | Forces encoder to learn network-condition-invariant representations |
+| EMA target encoder | Prevents representation collapse without negative pairs |
+| flow_ctx never degraded | Global statistics are stable; only packet timing is noisy |
+| VICReg variance term | Prevents dimensional collapse (all embeddings becoming identical) |
+| DBSCAN pseudo-labels | Provides class structure signal before any labels are used |
+| 143-dim embedding (128+15) | Residual connection of raw flow_ctx preserves interpretable stats |
+| 500k row cap per CSV | Keeps parse time < 5s per file; still yields ~800 flows per file |
