@@ -1,0 +1,8 @@
+# Override defaults for a specific experiment
+training:
+  phase1_epochs: 150
+  batch_size: 128
+  lr_phase1: 1.0e-3
+
+loss:
+  vicreg_beta: 50.0   # increase if representations collapse
