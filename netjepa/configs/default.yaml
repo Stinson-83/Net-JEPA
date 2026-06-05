@@ -73,5 +73,5 @@ evaluation:
 downstream:
   embedding_dim: 143
   knn_k: 5
-  num_classes: 14
+  num_classes: 15
   num_categories: 6

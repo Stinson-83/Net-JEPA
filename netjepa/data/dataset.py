@@ -20,9 +20,9 @@ class FlowDataset(Dataset):
     def __getitem__(self, idx: int) -> dict:
         row = self.df.iloc[idx]
 
-        pkt_seq  = np.array(row['packet_sequence'], dtype=np.float32)
-        flow_ctx = np.array(row['flow_context'],    dtype=np.float32)
-        pad_mask = np.array(row['padding_mask'],    dtype=bool)
+        pkt_seq  = np.asarray([list(r) for r in row['packet_sequence']], dtype=np.float32)
+        flow_ctx = np.asarray(list(row['flow_context']),                dtype=np.float32)
+        pad_mask = np.asarray(list(row['padding_mask']),                dtype=bool)
 
         app_label      = int(row['app_label'])
         category_label = int(row['category_label'])

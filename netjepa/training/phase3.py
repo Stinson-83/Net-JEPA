@@ -51,7 +51,7 @@ def train_phase3(processed_dir: str, ckpt_dir: str = 'checkpoints/phase3',
                  phase2_ckpt: str | None = None,
                  epochs: int = 50, batch_size: int = 64,
                  lr: float = 1e-3, weight_decay: float = 1e-4,
-                 num_classes: int = 14, embedding_dim: int = 143,
+                 num_classes: int = 15, embedding_dim: int = 143,
                  device_str: str = 'cuda',
                  use_wandb: bool = False,
                  **model_kwargs) -> dict:

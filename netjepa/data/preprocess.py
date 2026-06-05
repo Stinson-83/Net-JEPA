@@ -114,18 +114,39 @@ def run_pipeline(raw_dir: str, out_dir: str,
     print(f'Total flows (processed): {len(df_all)}')
 
     # ── STEP 5: stratified splits ──────────────────────────────────────────
+    from collections import Counter
     labels = df_all['app_label'].values
     indices = np.arange(len(df_all))
 
-    idx_pre, idx_rest = train_test_split(
-        indices, test_size=1 - pretrain_frac,
-        stratify=labels, random_state=seed)
+    # Classes with only 1 sample can't be stratified — force them into pretrain
+    label_counts = Counter(labels)
+    rare_mask = np.array([label_counts[l] < 2 for l in labels])
+    rare_indices = indices[rare_mask]
+    normal_indices = indices[~rare_mask]
+    if len(rare_indices):
+        rare_apps = [APP_LABELS[l] for l in set(labels[rare_mask])]
+        print(f'[INFO] {len(rare_indices)} flows from under-sampled classes '
+              f'forced into pretrain: {rare_apps}')
+
+    normal_labels = labels[normal_indices]
+    idx_pre_normal, idx_rest = train_test_split(
+        normal_indices, test_size=1 - pretrain_frac,
+        stratify=normal_labels, random_state=seed)
+    idx_pre = np.concatenate([idx_pre_normal, rare_indices])
 
     rest_labels = labels[idx_rest]
+    rest_label_counts = Counter(rest_labels)
+    rare_rest_mask = np.array([rest_label_counts[l] < 2 for l in rest_labels])
+    rare_rest = idx_rest[rare_rest_mask]
+    normal_rest = idx_rest[~rare_rest_mask]
+    if len(rare_rest):
+        idx_pre = np.concatenate([idx_pre, rare_rest])
+
     ds_frac_of_rest = downstream_frac / (1 - pretrain_frac)
+    normal_rest_labels = labels[normal_rest]
     idx_ds, idx_test = train_test_split(
-        idx_rest, test_size=1 - ds_frac_of_rest,
-        stratify=rest_labels, random_state=seed)
+        normal_rest, test_size=1 - ds_frac_of_rest,
+        stratify=normal_rest_labels, random_state=seed)
 
     splits = {'pretrain': idx_pre.tolist(),
               'downstream_train': idx_ds.tolist(),

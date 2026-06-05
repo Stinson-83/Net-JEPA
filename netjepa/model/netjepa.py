@@ -60,10 +60,9 @@ class NetJEPA(nn.Module):
     def forward_downstream(self, packet_seq: torch.Tensor,
                             flow_ctx: torch.Tensor,
                             padding_mask: torch.Tensor) -> torch.Tensor:
-        with torch.no_grad():
-            pkt_latents = self.temporal_encoder(packet_seq, padding_mask)
-        flow_vec  = self.pooling_b(pkt_latents)           # (B, 128)
-        embedding = torch.cat([flow_vec, flow_ctx], dim=-1)  # (B, 143)
+        pkt_latents = self.temporal_encoder(packet_seq, padding_mask)
+        flow_vec    = self.pooling_b(pkt_latents)           # (B, 128)
+        embedding   = torch.cat([flow_vec, flow_ctx], dim=-1)  # (B, 143)
         return embedding
 
     def update_target(self, momentum: float) -> None:

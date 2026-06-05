@@ -30,8 +30,9 @@ def classification_report(y_true: np.ndarray, y_pred: np.ndarray,
         Path(out_dir).mkdir(parents=True, exist_ok=True)
         cm = confusion_matrix(y_true, y_pred)
         fig, ax = plt.subplots(figsize=(10, 8))
+        labels = class_names if class_names is not None else True
         sns.heatmap(cm, annot=True, fmt='d', ax=ax,
-                    xticklabels=class_names, yticklabels=class_names)
+                    xticklabels=labels, yticklabels=labels)
         ax.set_xlabel('Predicted')
         ax.set_ylabel('True')
         fig.tight_layout()
