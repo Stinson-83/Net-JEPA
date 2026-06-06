@@ -1,0 +1,77 @@
+{
+  "accuracy": 0.8913250714966635,
+  "macro_f1": 0.6575935322691874,
+  "per_class_f1": {
+    "game_streaming": 0.3880597014925373,
+    "live_streaming": 0.9348441926345609,
+    "metaverse": 0.925569176882662,
+    "online_game": 0.8177777777777778,
+    "stored_streaming": 0.8793103448275862,
+    "video_conferencing": 0.0
+  },
+  "confusion_matrix": {
+    "labels": [
+      "game_streaming",
+      "live_streaming",
+      "metaverse",
+      "online_game",
+      "stored_streaming",
+      "video_conferencing"
+    ],
+    "matrix": [
+      [
+        13,
+        2,
+        15,
+        6,
+        0,
+        0
+      ],
+      [
+        0,
+        330,
+        14,
+        10,
+        3,
+        0
+      ],
+      [
+        3,
+        5,
+        1057,
+        34,
+        5,
+        0
+      ],
+      [
+        15,
+        11,
+        78,
+        368,
+        1,
+        0
+      ],
+      [
+        0,
+        1,
+        15,
+        3,
+        102,
+        0
+      ],
+      [
+        0,
+        0,
+        1,
+        6,
+        0,
+        0
+      ]
+    ]
+  },
+  "intra_class_cos": 0.944,
+  "inter_class_cos": 0.917,
+  "latency_ms_cpu": 3.4,
+  "latency_ms_gpu": 1.4,
+  "silhouette": -0.01
+}

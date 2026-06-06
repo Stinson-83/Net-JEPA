@@ -1,0 +1,21 @@
+{
+  "datasets": [
+    {
+      "id": "phase3b_supcon",
+      "name": "Phase 3b \u2014 SupCon fine-tuned",
+      "trained_on": "2026-06-07",
+      "n_flows": 2098
+    }
+  ],
+  "active_dataset": "phase3b_supcon",
+  "classes": [
+    "game_streaming",
+    "live_streaming",
+    "metaverse",
+    "online_game",
+    "stored_streaming",
+    "video_conferencing"
+  ],
+  "embedding_dim": 143,
+  "model_version": "netjepa-ckpt-e50"
+}
