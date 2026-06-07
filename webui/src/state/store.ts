@@ -21,10 +21,15 @@ import type {
   Manifest,
   MetricsData,
   ProjectionResult,
+  ServerStageEvent,
   TrainingCurvePoint,
   UmapPoint,
 } from '../data/types';
 import { loadApp, loadDatasetBundle, loadFlowDetail } from '../data/loader';
+import { serverHealthy } from '../data/server';
+import { startLiveStream } from '../data/ws';
+
+const MAX_LIVE_EVENTS = 60;
 
 export type InspectorTab = 'selected' | 'injected' | 'classStats';
 export type MetricsTab = 'curves' | 'confusion' | 'robustness';
@@ -62,6 +67,8 @@ interface AppState {
   dataLoading: boolean;
   bootstrap: () => Promise<void>;
   switchDataset: (id: string) => Promise<void>;
+  /** Quietly reload the active bundle (e.g. after a server inference appended new points) without the loading flicker. */
+  refreshBundle: () => Promise<void>;
 
   // ── selection / hover ───────────────────────────────────────────────────
   selectedFlowId: string | null;
@@ -106,6 +113,13 @@ interface AppState {
   setPipelineStageIndex: (i: number) => void;
   resetPipeline: () => void;
 
+  // ── live /ws stream from the inference server ───────────────────────────
+  liveStreamConnected: boolean;
+  liveEvents: ServerStageEvent[]; // newest first, capped
+  pushLiveEvent: (e: ServerStageEvent) => void;
+  setLiveStreamConnected: (c: boolean) => void;
+  clearLiveEvents: () => void;
+
   // ── auto-demo ───────────────────────────────────────────────────────────
   autoDemo: boolean;
   toggleAutoDemo: () => void;
@@ -129,6 +143,15 @@ export const useStore = create<AppState>((set, get) => ({
     set({ dataLoading: true });
     const { manifest, bundle } = await loadApp();
     set({ manifest, bundle, dataLoading: false, hiddenClasses: new Set() });
+
+    // Open the live pipeline stream when the inference server is up. Harmless
+    // when it's down — the socket just retries quietly in the background.
+    if (await serverHealthy()) {
+      startLiveStream({
+        onEvent: (e) => get().pushLiveEvent(e),
+        onStatus: (c) => get().setLiveStreamConnected(c),
+      });
+    }
   },
 
   switchDataset: async (id: string) => {
@@ -143,6 +166,13 @@ export const useStore = create<AppState>((set, get) => ({
     });
     const next = await loadDatasetBundle(manifest, id);
     set({ bundle: next, dataLoading: false });
+  },
+
+  refreshBundle: async () => {
+    const { manifest, bundle } = get();
+    if (!manifest || !bundle) return;
+    const next = await loadDatasetBundle(manifest, bundle.id);
+    set({ bundle: next });
   },
 
   selectedFlowId: null,
@@ -227,6 +257,12 @@ export const useStore = create<AppState>((set, get) => ({
   setPipelinePlaying: (v) => set({ pipelinePlaying: v }),
   setPipelineStageIndex: (i) => set({ pipelineStageIndex: i }),
   resetPipeline: () => set({ pipelinePlaying: false, pipelineStageIndex: -1 }),
+
+  liveStreamConnected: false,
+  liveEvents: [],
+  pushLiveEvent: (e) => set((s) => ({ liveEvents: [e, ...s.liveEvents].slice(0, MAX_LIVE_EVENTS) })),
+  setLiveStreamConnected: (c) => set({ liveStreamConnected: c }),
+  clearLiveEvents: () => set({ liveEvents: [] }),
 
   autoDemo: true,
   toggleAutoDemo: () => set((s) => ({ autoDemo: !s.autoDemo })),

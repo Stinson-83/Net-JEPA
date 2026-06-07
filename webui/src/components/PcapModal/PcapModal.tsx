@@ -12,7 +12,7 @@ type Phase =
   | { kind: 'drop' }
   | { kind: 'busy'; label: string }
   | { kind: 'error'; message: string }
-  | { kind: 'pick'; fileName: string; flows: InjectedFlow[]; truncated: boolean };
+  | { kind: 'pick'; fileName: string; file: File; flows: InjectedFlow[]; truncated: boolean };
 
 /** Wait two animation frames — long enough for React to paint the "busy" label before a synchronous parse blocks the main thread. */
 function paint(): Promise<void> {
@@ -77,7 +77,7 @@ export default function PcapModal() {
         });
         return;
       }
-      setPhase({ kind: 'pick', fileName: file.name, flows, truncated });
+      setPhase({ kind: 'pick', fileName: file.name, file, flows, truncated });
     } catch (err) {
       setPhase({ kind: 'error', message: err instanceof PcapParseError ? err.message : 'Could not parse this file as a .pcap capture.' });
     }
@@ -149,7 +149,7 @@ export default function PcapModal() {
                     <UploadCloud size={22} className="text-[var(--nj-text-faint)]" />
                     <div className="font-ui text-[12px] text-[var(--nj-text-dim)]">Drop a .pcap here, or click to browse</div>
                     <div className="max-w-[320px] font-mono text-[9px] leading-relaxed text-[var(--nj-text-faint)]">
-                      classic libpcap format · parsed entirely in your browser — the file never leaves this tab
+                      classic libpcap format · parsed in your browser; sent to the local inference server for real classification when one is running
                     </div>
                   </label>
 
@@ -175,7 +175,7 @@ export default function PcapModal() {
                 </div>
               )}
 
-              {phase.kind === 'pick' && <FlowPicker fileName={phase.fileName} flows={phase.flows} truncated={phase.truncated} />}
+              {phase.kind === 'pick' && <FlowPicker fileName={phase.fileName} file={phase.file} flows={phase.flows} truncated={phase.truncated} />}
             </div>
           </motion.div>
         </motion.div>
@@ -184,7 +184,7 @@ export default function PcapModal() {
   );
 }
 
-function FlowPicker({ fileName, flows, truncated }: { fileName: string; flows: InjectedFlow[]; truncated: boolean }) {
+function FlowPicker({ fileName, file, flows, truncated }: { fileName: string; file: File; flows: InjectedFlow[]; truncated: boolean }) {
   return (
     <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="flex flex-col gap-2.5">
       <div className="font-mono text-[10px] text-[var(--nj-text-dim)]">
@@ -203,7 +203,7 @@ function FlowPicker({ fileName, flows, truncated }: { fileName: string; flows: I
         {flows.map((flow) => (
           <li key={flow.flowId}>
             <button
-              onClick={() => void injectFlow(flow, fileName)}
+              onClick={() => void injectFlow(flow, fileName, file)}
               className="flex w-full cursor-pointer items-center gap-3 rounded-md border border-[var(--nj-border)] bg-black/15 px-3 py-2 text-left transition-colors hover:border-[var(--nj-accent)]/50 hover:bg-[var(--nj-accent)]/[0.05]"
             >
               <Network size={13} className="shrink-0 text-[var(--nj-text-faint)]" />

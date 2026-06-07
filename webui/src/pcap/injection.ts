@@ -18,7 +18,8 @@
 
 import { useStore, PIPELINE_STAGES } from '../state/store';
 import { projectToUMAP } from '../data/mockProjector';
-import type { InjectedFlow } from '../data/types';
+import { inferPcapOnServer } from '../data/server';
+import type { InjectedFlow, ProjectionResult, UmapPoint } from '../data/types';
 
 const STAGE_MS = 460;
 /** Fire the projection once the walk reaches this stage — late enough that "the encoder finished" reads as the cause of "here's the projection". */
@@ -40,21 +41,74 @@ async function walkStages(onStage?: (id: (typeof PIPELINE_STAGES)[number]) => vo
 }
 
 /**
+ * Pick, from the points the server just inferred for this pcap, the one that
+ * best corresponds to the flow the user chose to watch. The server's
+ * flow_summary is `"{proto} · {n} pkts · {avg} B avg · {dur}s"`; we match on
+ * protocol + average packet size (robust to the server's 64-packet cap, which
+ * makes raw packet counts diverge from the client's full-flow count).
+ */
+function matchServerPoint(flow: InjectedFlow, added: UmapPoint[]): UmapPoint | null {
+  if (added.length === 0) return null;
+  if (added.length === 1) return added[0];
+  const proto = flow.tuple.protocol.toUpperCase();
+  let best = added[0];
+  let bestScore = Infinity;
+  for (const p of added) {
+    const summary = (p.flow_summary ?? '').toUpperCase();
+    const avgMatch = summary.match(/·\s*([\d.]+)\s*B\s*AVG/);
+    const avg = avgMatch ? parseFloat(avgMatch[1]) : 0;
+    const protoPenalty = summary.startsWith(proto) ? 0 : 1_000;
+    const score = Math.abs(avg - flow.avgPacketSize) + protoPenalty;
+    if (score < bestScore) {
+      bestScore = score;
+      best = p;
+    }
+  }
+  return best;
+}
+
+/**
  * Begin a brand-new injection session and animate it end to end. Resolves
  * once the pipeline walk completes — the comet flight (triggered the moment
  * the projection resolves, mid-walk) may still be settling in the background.
+ *
+ * When `file` is supplied and the inference server is reachable, the projection
+ * is produced by *real* end-to-end inference (POST /api/infer) and the cloud is
+ * refreshed so every flow in the capture is appended. Otherwise it falls back
+ * to the heuristic projector (mockProjector) over the in-memory cloud.
  */
-export async function injectFlow(flow: InjectedFlow, fileName: string): Promise<void> {
+export async function injectFlow(flow: InjectedFlow, fileName: string, file?: File): Promise<void> {
   if (useStore.getState().pipelinePlaying) return; // the "Inject" trigger is disabled mid-run; this is just a safety net for programmatic callers
   const sessionId = useStore.getState().beginInjectionSession(flow, fileName);
+
+  // Kick off real server inference immediately (in parallel with the stage
+  // walk) when we have the raw file — it parses + classifies the whole capture.
+  if (file) useStore.getState().clearLiveEvents(); // fresh ticker for this upload
+  const serverInfer: Promise<ProjectionResult | null> = file
+    ? inferPcapOnServer(file).then(async (added) => {
+        if (!added) return null;
+        await useStore.getState().refreshBundle(); // new points land in the cloud
+        const point = matchServerPoint(flow, added);
+        return point
+          ? { x: point.x, y: point.y, label: point.label, confidence: point.confidence }
+          : null;
+      })
+    : Promise.resolve(null);
 
   let projectionStarted = false;
   const fireProjection = () => {
     if (projectionStarted) return;
     projectionStarted = true;
     const { manifest, bundle, completeInjectionProjection } = useStore.getState();
-    const ctx = { points: bundle?.points ?? [], classes: manifest?.classes ?? [] };
-    void projectToUMAP(flow, ctx).then((projection) => completeInjectionProjection(sessionId, projection));
+    void serverInfer.then((real) => {
+      if (real) {
+        completeInjectionProjection(sessionId, real);
+        return;
+      }
+      // Fallback: heuristic projector over the current cloud.
+      const ctx = { points: bundle?.points ?? [], classes: manifest?.classes ?? [] };
+      void projectToUMAP(flow, ctx).then((projection) => completeInjectionProjection(sessionId, projection));
+    });
   };
 
   await walkStages((id) => {

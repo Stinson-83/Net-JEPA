@@ -1,6 +1,7 @@
 import { Activity } from 'lucide-react';
 import { useStore, PIPELINE_STAGES } from '../../state/store';
 import PipelineGraph from './PipelineGraph';
+import LiveStream from './LiveStream';
 
 type Status = 'idle' | 'running' | 'complete';
 
@@ -74,6 +75,7 @@ export default function PipelineTheatre() {
       {!collapsed && (
         <div className="nj-scroll min-h-0 flex-1 overflow-y-auto pr-1">
         <PipelineGraph />
+        <LiveStream />
         {sessions.length === 0 && (
           <button
             onClick={openModal}

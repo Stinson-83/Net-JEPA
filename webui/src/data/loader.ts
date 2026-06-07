@@ -20,6 +20,7 @@ import type {
   UmapPoint,
 } from './types';
 import { buildMockFlowDetail, getMockData } from './mockData';
+import { fetchServerCloud, fetchServerMetrics } from './server';
 
 const DATA_ROOT = `${import.meta.env.BASE_URL}data`.replace(/\/+/g, '/');
 
@@ -82,12 +83,20 @@ export async function loadDatasetBundle(manifest: Manifest, datasetId: string): 
   const root = datasetRoot(datasetId);
   const meta = manifest.datasets.find((d) => d.id === datasetId) ?? null;
 
-  const [points, metrics, curves, classStats] = await Promise.all([
+  // Prefer the live server (its cloud grows as flows are inferred); fall back
+  // to the static export when the server is unreachable. Curves/class-stats are
+  // always sourced from the export — they don't change at inference time.
+  const [serverPoints, staticPoints, staticMetrics, curves, classStats] = await Promise.all([
+    fetchServerCloud(),
     fetchJson<UmapPoint[]>(`${root}/embeddings_umap.json`),
     fetchJson<MetricsData>(`${root}/metrics.json`),
     fetchJson<TrainingCurvePoint[]>(`${root}/training_curves.json`),
     fetchJson<ClassStat[]>(`${root}/class_stats.json`),
   ]);
+  const serverMetrics = serverPoints ? await fetchServerMetrics() : null;
+
+  const points = serverPoints ?? staticPoints;
+  const metrics = serverMetrics ?? staticMetrics;
 
   const anyLive = Boolean(points || metrics || curves || classStats);
 

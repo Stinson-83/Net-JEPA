@@ -197,3 +197,26 @@ export interface InjectionSession {
   projection: ProjectionResult | null;
   injectedAt: number;
 }
+
+/** A pipeline-stage event streamed from the inference server over /ws. */
+export interface ServerStageEvent {
+  stage: 'parse' | 'flow' | 'preprocess' | 'encode' | 'classify' | 'project' | 'done' | 'error';
+  flow_id?: string;
+  pcap?: string;
+  src?: string;
+  dst?: string;
+  proto?: string;
+  packets?: number;
+  label?: string;
+  app?: string;
+  confidence?: number;
+  latency_ms?: number;
+  x?: number;
+  y?: number;
+  flow_summary?: string;
+  added?: number;
+  total_live?: number;
+  error?: string;
+  /** client-side receipt time, used for keying/ordering in the ticker */
+  at?: number;
+}
