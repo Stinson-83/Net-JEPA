@@ -69,9 +69,9 @@
       ]
     ]
   },
-  "intra_class_cos": 0.944,
+  "intra_class_cos": 0.943,
   "inter_class_cos": 0.917,
-  "latency_ms_cpu": 3.4,
-  "latency_ms_gpu": 1.4,
+  "latency_ms_cpu": 10.4,
+  "latency_ms_gpu": 1.1,
   "silhouette": -0.01
 }

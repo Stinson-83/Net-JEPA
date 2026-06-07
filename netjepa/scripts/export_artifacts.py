@@ -100,19 +100,30 @@ def _flow_summary(proto_id: int, sizes: list[int], duration_s: float, rtt_ms: fl
     return f'{proto} · {len(sizes)} pkts · {avg_size:.0f} B avg · {duration_s:.1f}s · {rtt_ms:.0f}ms rtt'
 
 
-def _project_2d(embeddings: np.ndarray, seed: int = 0) -> np.ndarray:
+def _project_2d(embeddings: np.ndarray, seed: int = 0):
     """UMAP if available (the real exporter should always have it — it's
     what produced the layouts the README screenshots show), PCA otherwise
-    so the script still runs somewhere without it installed."""
+    so the script still runs somewhere without it installed.
+
+    Returns ``(coords, reducer)``. ``reducer`` is the *fitted* projector and
+    supports ``.transform(new_embeddings)`` — the live server reuses it to
+    drop newly-inferred flows into this exact same 2D space (so the cloud can
+    grow over time without reshuffling). For UMAP this is a ``umap.UMAP``; for
+    the PCA fallback it's an ``sklearn`` ``PCA``; both expose ``.transform``.
+    """
     try:
         import umap
         print('  using umap-learn for the 2D projection')
-        return umap.UMAP(n_components=2, random_state=seed).fit_transform(embeddings)
+        reducer = umap.UMAP(n_components=2, random_state=seed)
+        coords = reducer.fit_transform(embeddings)
+        return coords, reducer
     except ImportError:
         print('  umap-learn not installed — falling back to PCA(2) '
               '(pip install umap-learn for a more faithful cluster layout)')
         from sklearn.decomposition import PCA
-        return PCA(n_components=2, random_state=seed).fit_transform(embeddings)
+        reducer = PCA(n_components=2, random_state=seed)
+        coords = reducer.fit_transform(embeddings)
+        return coords, reducer
 
 
 def _load_cfg(path: str) -> dict:
@@ -241,7 +252,13 @@ def main() -> None:
     model.to(device)
 
     print('Projecting test embeddings to 2D…')
-    coords = _project_2d(test_embs)
+    coords, reducer = _project_2d(test_embs)
+
+    # Persist the fitted projector so the live server can place newly-inferred
+    # flows into this exact same 2D space via reducer.transform(...).
+    import joblib
+    joblib.dump(reducer, out_dir / 'umap.joblib')
+    print(f'  saved fitted projector → {out_dir / "umap.joblib"}')
 
     # ── Per-flow decoding (sizes/IATs/direction/RTT/jitter/...) ────────
     print('Decoding per-flow packet series…')

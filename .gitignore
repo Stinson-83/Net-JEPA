@@ -4,6 +4,9 @@ __pycache__/
 .venv/
 venv/
 *.joblib
+# but DO ship the fitted UMAP reducer the live server reuses to place
+# newly-inferred flows into the exported cloud's 2D space
+!webui/public/data/*/umap.joblib
 *.pt
 data/processed/
 checkpoints/
@@ -13,3 +16,6 @@ wandb/
 *.egg-info/
 dist/
 build/
+
+# server-side live inference store (grows at runtime, not a source artifact)
+server/data/
