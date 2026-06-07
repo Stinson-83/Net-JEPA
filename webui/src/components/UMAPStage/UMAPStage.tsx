@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore, EMPTY_POINTS, EMPTY_CLASSES } from '../../state/store';
 import { Camera } from './camera';
+import { classColor } from '../../data/classColors';
 import UMAPCanvas, { type HoverInfo } from './UMAPCanvas';
 import KnnLines from './KnnLines';
 import InjectionComet from './InjectionComet';
@@ -8,6 +9,7 @@ import Legend from './Legend';
 import Minimap from './Minimap';
 import SessionTray from './SessionTray';
 import Tooltip from './Tooltip';
+import SimilarityProbe from './SimilarityProbe';
 
 /**
  * Left "main stage": the WebGL UMAP point-cloud theatre plus its DOM overlays
@@ -56,8 +58,21 @@ export default function UMAPStage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [classes]);
 
+  // Compute per-class centroids for floating labels
+  const centroids = useMemo(() => {
+    if (points.length === 0 || classes.length === 0) return [];
+    return classes.map((label) => {
+      const members = points.filter((p) => p.label === label);
+      if (members.length === 0) return null;
+      const cx = members.reduce((s, p) => s + p.x, 0) / members.length;
+      const cy = members.reduce((s, p) => s + p.y, 0) / members.length;
+      const cz = members.reduce((s, p) => s + (p.z ?? 0), 0) / members.length;
+      return { label, cx, cy, cz, count: members.length };
+    }).filter(Boolean) as { label: string; cx: number; cy: number; cz: number; count: number }[];
+  }, [points, classes]);
+
   return (
-    <section className="nj-hex-grid relative h-full w-full overflow-hidden rounded-lg border border-[var(--nj-border)] bg-[var(--nj-bg-raised)]">
+    <section className="nj-hex-grid relative h-full w-full overflow-hidden rounded-lg border border-[var(--nj-border)] bg-[var(--nj-bg-raised)]" style={{ backgroundSize: '56px 100px' }}>
       {points.length > 0 ? (
         <>
           <UMAPCanvas cameraRef={cameraRef} onHover={setHover} />
@@ -67,6 +82,9 @@ export default function UMAPStage() {
           <Minimap cameraRef={cameraRef} />
           <SessionTray />
           <Tooltip info={hover} />
+          <SimilarityProbe cameraRef={cameraRef} />
+          {/* Centroid labels */}
+          <CentroidLabels cameraRef={cameraRef} centroids={centroids} classes={classes} />
         </>
       ) : (
         <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-center">
@@ -80,10 +98,75 @@ export default function UMAPStage() {
       )}
       <div className="nj-bracket nj-bracket-active pointer-events-none absolute left-4 top-4 z-20 px-2 py-1">
         <span className="font-ui text-[9px] uppercase tracking-[0.22em] text-[var(--nj-text-faint)]">
-          Embedding Space · UMAP(2)
+          Embedding Space · UMAP(3)
         </span>
       </div>
+      {/* Radial vignette overlay */}
+      <div
+        className="pointer-events-none absolute inset-0 z-10"
+        style={{
+          background: 'radial-gradient(ellipse at center, transparent 55%, rgba(7,9,13,0.45) 100%)',
+        }}
+      />
       <div className="nj-scanlines" />
     </section>
+  );
+}
+
+/** Floating class-name labels anchored to each cluster’s centroid. */
+function CentroidLabels({ cameraRef, centroids, classes }: {
+  cameraRef: React.RefObject<Camera | null>;
+  centroids: { label: string; cx: number; cy: number; cz: number; count: number }[];
+  classes: string[];
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const labelsRef = useRef<HTMLDivElement[]>([]);
+
+  useEffect(() => {
+    if (centroids.length === 0) return;
+    let raf = 0;
+    const draw = () => {
+      raf = requestAnimationFrame(draw);
+      const camera = cameraRef.current;
+      if (!camera) return;
+      for (let i = 0; i < centroids.length; i++) {
+        const c = centroids[i];
+        const el = labelsRef.current[i];
+        if (!el) continue;
+        const s = camera.dataToScreen(c.cx, c.cy, c.cz);
+        el.style.transform = `translate(${s.x}px, ${s.y - 16}px)`;
+      }
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, [cameraRef, centroids]);
+
+  if (centroids.length === 0) return null;
+
+  return (
+    <div ref={containerRef} className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
+      {centroids.map((c, i) => {
+        const hue = classColor(classes, c.label);
+        return (
+          <div
+            key={c.label}
+            ref={(el) => { if (el) labelsRef.current[i] = el; }}
+            className="absolute left-0 top-0 flex flex-col items-center"
+            style={{ willChange: 'transform' }}
+          >
+            <span
+              className="whitespace-nowrap font-mono text-[9px] font-medium tracking-wide"
+              style={{
+                color: hue.hex,
+                textShadow: `0 0 8px rgba(0,0,0,0.8), 0 1px 3px rgba(0,0,0,0.6)`,
+              }}
+            >
+              {c.label}
+            </span>
+            <span className="mt-px h-[6px] w-px" style={{ background: hue.hex, opacity: 0.5 }} />
+          </div>
+        );
+      })}
+    </div>
   );
 }

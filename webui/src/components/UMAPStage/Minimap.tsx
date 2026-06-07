@@ -92,8 +92,14 @@ export default function Minimap({ cameraRef }: { cameraRef: React.RefObject<Came
         mx: ((x - bounds.minX) / spanX) * W,
         my: (1 - (y - bounds.minY) / spanY) * H,
       });
-      const tl = toMini(camera.cx - camera.halfExtentX, camera.cy + camera.halfExtentY);
-      const br = toMini(camera.cx + camera.halfExtentX, camera.cy - camera.halfExtentY);
+      // For 3D, the viewport rect is approximate (top-down projection of the visible area)
+      const vr = 1 / camera.zoom;
+      const cx = camera.cx;
+      const cy = camera.cy;
+      const halfW = camera.baseExtent * vr;
+      const halfH = halfW * (camera.height / Math.max(camera.width, 1));
+      const tl = toMini(cx - halfW, cy + halfH);
+      const br = toMini(cx + halfW, cy - halfH);
       ctx.strokeStyle = 'rgba(125,211,252,0.9)';
       ctx.lineWidth = 1;
       ctx.strokeRect(tl.mx + 0.5, tl.my + 0.5, Math.max(br.mx - tl.mx, 1), Math.max(br.my - tl.my, 1));
@@ -120,7 +126,7 @@ export default function Minimap({ cameraRef }: { cameraRef: React.RefObject<Came
   if (points.length === 0) return null;
 
   return (
-    <div className="nj-bracket nj-bracket-active absolute bottom-4 right-4 z-20 overflow-hidden rounded-md border border-[var(--nj-border)] bg-[var(--nj-surface)] backdrop-blur-sm">
+    <div className="nj-bracket nj-bracket-active !absolute left-4 top-16 z-20 w-48 overflow-hidden rounded-md border border-[var(--nj-border)] bg-[var(--nj-surface)] backdrop-blur-sm">
       <div className="border-b border-[var(--nj-border)] px-2 py-1 font-ui text-[9px] uppercase tracking-[0.18em] text-[var(--nj-text-dim)]">
         Minimap
       </div>

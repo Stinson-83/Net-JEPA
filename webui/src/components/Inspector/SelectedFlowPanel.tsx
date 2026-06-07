@@ -18,7 +18,7 @@ export default function SelectedFlowPanel() {
       <EmptyState
         icon={Crosshair}
         title="Nothing selected"
-        body="Click any point in the embedding space — or press 1–9 to isolate a class — to inspect its features, top-3 prediction, and nearest neighbours."
+        body="click a point in the embedding space"
       />
     );
   }

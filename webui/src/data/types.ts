@@ -19,13 +19,24 @@ export interface Manifest {
   classes: string[];
   embedding_dim: number;
   model_version: string;
+  training_phases?: TrainingPhase[];
 }
 
-/** One projected flow in the 2D UMAP point cloud. */
+export interface TrainingPhase {
+  id: string;
+  label: string;
+  epochs: number;
+  status: 'done' | 'current' | 'pending';
+  current_epoch?: number;
+}
+
+/** One projected flow in the UMAP point cloud (2D or 3D). */
 export interface UmapPoint {
   id: string;
   x: number;
   y: number;
+  /** z-coordinate for 3D UMAP. Defaults to 0 if missing (2D fallback). */
+  z?: number;
   label: string;
   confidence: number;
   flow_summary?: string;
@@ -73,6 +84,8 @@ export interface MetricsData {
   latency_ms_gpu: number;
   silhouette: number;
   robustness?: RobustnessPoint[];
+  /** Per-KPI context notes, e.g. { macro_f1: "Limited by video_conferencing — only 8 flows." } */
+  notes?: Record<string, string>;
 }
 
 export interface TrainingCurvePoint {

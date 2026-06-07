@@ -1,26 +1,48 @@
 import { Fragment, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Grid3x3 } from 'lucide-react';
-import { useStore } from '../../state/store';
+import { useStore, EMPTY_CLASSES } from '../../state/store';
+import { classColor, hexToRgb01 } from '../../data/classColors';
 import { EmptyState } from '../shared/EmptyState';
 
-const GOOD_RGB = '74,222,128';
-const BAD_RGB = '251,113,133';
+/**
+ * Smart-truncate class names: keep unique prefix, truncate at word boundary
+ * e.g. "video_conferencing" → "video_conf", "online_game" → "online_ga"
+ */
+function smartTruncate(label: string, max = 10): string {
+  if (label.length <= max) return label;
+  // Try to break at underscore
+  const parts = label.split('_');
+  let result = parts[0];
+  for (let i = 1; i < parts.length; i++) {
+    const next = result + '_' + parts[i];
+    if (next.length > max) {
+      // Add partial of next part
+      const remaining = max - result.length - 1;
+      if (remaining > 2) result += '_' + parts[i].slice(0, remaining);
+      break;
+    }
+    result = next;
+  }
+  return result.length < label.length ? result : label.slice(0, max);
+}
 
-function shorten(label: string, max = 7): string {
-  return label.length > max ? `${label.slice(0, max - 1)}…` : label;
+/** Compute relative luminance of a hex color to determine text contrast */
+function luminance(hex: string): number {
+  const [r, g, b] = hexToRgb01(hex);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
 interface HoverCell { i: number; j: number }
 
 /**
- * "Confusion" tab — a per-row-normalised heatmap (rows = true class, columns
- * = predicted class). Diagonal cells tint green (correct), off-diagonal tint
- * red (confused), intensity ∝ the row-fraction — so imbalanced classes read
- * just as clearly as balanced ones. Hover any cell for the exact count.
+ * "Confusion" tab — each row uses its class's own accent hue as the colormap
+ * maximum, so the matrix reads as a per-class heat signature. Diagonal cells
+ * get a 1px inner stroke highlight. Raw counts are always visible.
  */
 export default function ConfusionPanel() {
   const cm = useStore((s) => s.bundle?.metrics?.confusion_matrix ?? null);
+  const classes = useStore((s) => s.manifest?.classes ?? EMPTY_CLASSES);
   const [hover, setHover] = useState<HoverCell | null>(null);
 
   if (!cm || cm.labels.length === 0 || cm.matrix.length === 0) {
@@ -45,51 +67,79 @@ export default function ConfusionPanel() {
     : null;
 
   return (
-    <div className="flex h-full flex-col gap-2">
+    <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between px-0.5">
         <span className="font-mono text-[8px] uppercase tracking-[0.14em] text-[var(--nj-text-faint)]">rows = true · cols = predicted</span>
-        <div className="flex items-center gap-3">
-          <Swatch color={`rgb(${GOOD_RGB})`} label="correct" />
-          <Swatch color={`rgb(${BAD_RGB})`} label="confused" />
-        </div>
       </div>
 
-      <div className="grid flex-1 content-start gap-[2px]" style={{ gridTemplateColumns: `minmax(46px,64px) repeat(${n}, minmax(0, 1fr))` }}>
+      <div
+        className="grid gap-[2px]"
+        style={{ gridTemplateColumns: `minmax(46px,64px) repeat(${n}, minmax(0, 1fr))` }}
+      >
+        {/* Column headers */}
         <div />
         {cm.labels.map((l, j) => (
-          <div key={j} className="truncate px-0.5 pb-1 text-center font-mono text-[7px] text-[var(--nj-text-faint)]" title={l}>
-            {shorten(l)}
+          <div
+            key={j}
+            className="truncate px-0.5 pb-1 text-center font-mono text-[7px] text-[var(--nj-text-faint)]"
+            title={l}
+          >
+            {smartTruncate(l)}
           </div>
         ))}
-        {cm.matrix.map((row, i) => (
-          <Fragment key={i}>
-            <div className="flex items-center justify-end truncate pr-1.5 font-mono text-[8px] text-[var(--nj-text-faint)]" title={cm.labels[i]}>
-              {cm.labels[i]}
-            </div>
-            {row.map((v, j) => {
-              const frac = v / rowTotals[i];
-              const rgb = i === j ? GOOD_RGB : BAD_RGB;
-              const isHover = hover?.i === i && hover?.j === j;
-              return (
-                <div
-                  key={j}
-                  onMouseEnter={() => setHover({ i, j })}
-                  onMouseLeave={() => setHover((h) => (h?.i === i && h?.j === j ? null : h))}
-                  className="relative flex aspect-square cursor-default items-center justify-center rounded-[2px] font-mono text-[8px] transition-[transform,outline-color] duration-150"
-                  style={{
-                    background: `rgba(${rgb}, ${(0.05 + frac * 0.85).toFixed(3)})`,
-                    color: frac > 0.42 ? 'rgba(7,9,13,0.8)' : 'var(--nj-text-faint)',
-                    outline: isHover ? '1.5px solid var(--nj-accent)' : '1.5px solid transparent',
-                    transform: isHover ? 'scale(1.18)' : 'scale(1)',
-                    zIndex: isHover ? 10 : 0,
-                  }}
-                >
-                  {frac > 0.1 ? Math.round(frac * 100) : ''}
-                </div>
-              );
-            })}
-          </Fragment>
-        ))}
+
+        {/* Matrix rows */}
+        {cm.matrix.map((row, i) => {
+          const rowHue = classColor(classes, cm.labels[i]);
+          const [hr, hg, hb] = hexToRgb01(rowHue.hex);
+          const rowLum = luminance(rowHue.hex);
+
+          return (
+            <Fragment key={i}>
+              {/* Row label */}
+              <div
+                className="flex items-center justify-end truncate pr-1.5 font-mono text-[8px] text-[var(--nj-text-faint)]"
+                title={cm.labels[i]}
+              >
+                {smartTruncate(cm.labels[i])}
+              </div>
+
+              {/* Cells */}
+              {row.map((v, j) => {
+                const frac = v / rowTotals[i];
+                const isDiag = i === j;
+                const isHover = hover?.i === i && hover?.j === j;
+
+                // Per-class hue colormap: #0a0e14 (zero) → class accent (max)
+                const bg = `rgba(${Math.round(hr * 255 * frac + 10 * (1 - frac))}, ${Math.round(hg * 255 * frac + 14 * (1 - frac))}, ${Math.round(hb * 255 * frac + 20 * (1 - frac))}, ${(0.15 + frac * 0.85).toFixed(3)})`;
+
+                // Text color: white if cell is dark, dark if cell is light
+                const cellBrightness = frac * rowLum;
+                const textColor = cellBrightness > 0.35 ? 'rgba(7,9,13,0.9)' : 'rgba(201,209,217,0.85)';
+
+                return (
+                  <div
+                    key={j}
+                    onMouseEnter={() => setHover({ i, j })}
+                    onMouseLeave={() => setHover((h) => (h?.i === i && h?.j === j ? null : h))}
+                    className="relative flex aspect-square cursor-default items-center justify-center rounded-[2px] font-mono text-[8px] transition-[transform,outline-color] duration-150"
+                    style={{
+                      background: bg,
+                      color: textColor,
+                      outline: isHover ? '1.5px solid var(--nj-accent)' : isDiag ? '1px solid #7dd3fc44' : '1.5px solid transparent',
+                      transform: isHover ? 'scale(1.12)' : 'scale(1)',
+                      zIndex: isHover ? 10 : 0,
+                    }}
+                    title={`${cm.labels[i]} → ${cm.labels[j]}: ${v} (${(frac * 100).toFixed(1)}%)`}
+                  >
+                    {/* Always show raw count */}
+                    {v > 0 ? v : ''}
+                  </div>
+                );
+              })}
+            </Fragment>
+          );
+        })}
       </div>
 
       <div className="h-8 shrink-0">
@@ -111,15 +161,6 @@ export default function ConfusionPanel() {
           )}
         </AnimatePresence>
       </div>
-    </div>
-  );
-}
-
-function Swatch({ color, label }: { color: string; label: string }) {
-  return (
-    <div className="flex items-center gap-1">
-      <span className="h-2 w-2 rounded-[2px]" style={{ background: color }} />
-      <span className="font-mono text-[8px] text-[var(--nj-text-faint)]">{label}</span>
     </div>
   );
 }

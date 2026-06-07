@@ -15,7 +15,7 @@ export default function InjectedFlowPanel() {
       <EmptyState
         icon={Radar}
         title="No injected flows yet"
-        body='Use "Inject .pcap" in the top bar to drop a capture into the live pipeline and watch it land in the embedding space.'
+        body="drop a .pcap to begin"
       />
     );
   }

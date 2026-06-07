@@ -31,7 +31,7 @@ export default function SessionTray() {
   };
 
   return (
-    <div className="nj-bracket nj-bracket-active absolute right-4 top-4 z-20 w-64 overflow-hidden rounded-md border border-[var(--nj-border)] bg-[var(--nj-surface)] backdrop-blur-sm">
+    <div className="nj-bracket nj-bracket-active !absolute right-4 top-4 z-20 w-64 max-h-[45%] overflow-hidden rounded-md border border-[var(--nj-border)] bg-[var(--nj-surface)] backdrop-blur-sm">
       <button
         onClick={toggle}
         className="flex w-full cursor-pointer items-center gap-2 border-b border-[var(--nj-border)] px-2.5 py-1.5 text-left hover:bg-white/[0.03]"

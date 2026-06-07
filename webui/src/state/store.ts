@@ -105,6 +105,16 @@ interface AppState {
   setPipelinePlaying: (v: boolean) => void;
   setPipelineStageIndex: (i: number) => void;
   resetPipeline: () => void;
+
+  // ── auto-demo ───────────────────────────────────────────────────────────
+  autoDemo: boolean;
+  toggleAutoDemo: () => void;
+  lastUserInteraction: number;
+  markUserInteraction: () => void;
+
+  // ── layout ──────────────────────────────────────────────────────────────
+  theatreCollapsed: boolean;
+  setTheatreCollapsed: (v: boolean) => void;
 }
 
 let selectGeneration = 0;
@@ -217,6 +227,14 @@ export const useStore = create<AppState>((set, get) => ({
   setPipelinePlaying: (v) => set({ pipelinePlaying: v }),
   setPipelineStageIndex: (i) => set({ pipelineStageIndex: i }),
   resetPipeline: () => set({ pipelinePlaying: false, pipelineStageIndex: -1 }),
+
+  autoDemo: true,
+  toggleAutoDemo: () => set((s) => ({ autoDemo: !s.autoDemo })),
+  lastUserInteraction: Date.now(),
+  markUserInteraction: () => set({ lastUserInteraction: Date.now() }),
+
+  theatreCollapsed: false,
+  setTheatreCollapsed: (v) => set({ theatreCollapsed: v }),
 }));
 
 /** Convenience selector: the currently-active injection session, if any. */

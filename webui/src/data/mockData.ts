@@ -35,7 +35,7 @@ const SEED = 0xC0FFEE;
 // how distinct their packet-size & cadence profiles are from media traffic.
 interface ClusterSpec {
   label: string;
-  center: [number, number];
+  center: [number, number, number];
   spread: number;
   weight: number;
   // per-class plausible flow profiles (used for both points & class_stats)
@@ -45,12 +45,12 @@ interface ClusterSpec {
 }
 
 const CLUSTERS: ClusterSpec[] = [
-  { label: 'Streaming',     center: [-4.5,  3.0], spread: 2.0, weight: 1.15, pktSizeRange: [900, 1350], durationRange: [45, 320], rttRange: [18, 65] },
-  { label: 'Gaming',        center: [ 7.5, -4.5], spread: 1.7, weight: 1.0,  pktSizeRange: [110, 420],  durationRange: [20, 180], rttRange: [12, 48] },
-  { label: 'Conferencing',  center: [-1.0,  4.8], spread: 1.9, weight: 0.95, pktSizeRange: [260, 620],  durationRange: [60, 400], rttRange: [25, 90] },
-  { label: 'XR',            center: [ 5.5,  6.2], spread: 1.6, weight: 0.7,  pktSizeRange: [480, 980],  durationRange: [30, 240], rttRange: [15, 55] },
-  { label: 'IoT',           center: [-7.5, -6.0], spread: 1.4, weight: 0.65, pktSizeRange: [48, 180],   durationRange: [4, 65],   rttRange: [6, 35] },
-  { label: 'FileTransfer',  center: [ 2.0, -7.5], spread: 1.8, weight: 0.85, pktSizeRange: [1100, 1500], durationRange: [10, 220], rttRange: [10, 60] },
+  { label: 'Streaming',     center: [-4.5,  3.0,  2.5], spread: 2.0, weight: 1.15, pktSizeRange: [900, 1350], durationRange: [45, 320], rttRange: [18, 65] },
+  { label: 'Gaming',        center: [ 7.5, -4.5, -3.0], spread: 1.7, weight: 1.0,  pktSizeRange: [110, 420],  durationRange: [20, 180], rttRange: [12, 48] },
+  { label: 'Conferencing',  center: [-1.0,  4.8,  5.5], spread: 1.9, weight: 0.95, pktSizeRange: [260, 620],  durationRange: [60, 400], rttRange: [25, 90] },
+  { label: 'XR',            center: [ 5.5,  6.2, -1.0], spread: 1.6, weight: 0.7,  pktSizeRange: [480, 980],  durationRange: [30, 240], rttRange: [15, 55] },
+  { label: 'IoT',           center: [-7.5, -6.0,  0.5], spread: 1.4, weight: 0.65, pktSizeRange: [48, 180],   durationRange: [4, 65],   rttRange: [6, 35] },
+  { label: 'FileTransfer',  center: [ 2.0, -7.5, -5.0], spread: 1.8, weight: 0.85, pktSizeRange: [1100, 1500], durationRange: [10, 220], rttRange: [10, 60] },
 ];
 
 function buildManifest(): Manifest {
@@ -62,6 +62,13 @@ function buildManifest(): Manifest {
     classes: MOCK_CLASSES,
     embedding_dim: 128,
     model_version: 'net-jepa-vMOCK',
+    training_phases: [
+      { id: 'pretrain',  label: 'Pretrain',  epochs: 30, status: 'done' },
+      { id: 'jepa',      label: 'JEPA',      epochs: 40, status: 'done' },
+      { id: 'vicreg',    label: 'VICReg',    epochs: 20, status: 'done' },
+      { id: 'supcon',    label: 'SupCon',    epochs: 80, status: 'current', current_epoch: 50 },
+      { id: 'distill',   label: 'Distill',   epochs: 20, status: 'pending' },
+    ],
   };
 }
 
@@ -87,16 +94,19 @@ function buildPoints(rng: Rng): UmapPoint[] {
     for (let i = 0; i < n; i++) {
       const x = gaussian(rng, cluster.center[0], cluster.spread);
       const y = gaussian(rng, cluster.center[1], cluster.spread);
+      const z = gaussian(rng, cluster.center[2], cluster.spread * 0.8);
       const dx = x - cluster.center[0];
       const dy = y - cluster.center[1];
-      const distNorm = Math.sqrt(dx * dx + dy * dy) / cluster.spread;
+      const dz = z - cluster.center[2];
+      const distNorm = Math.sqrt(dx * dx + dy * dy + dz * dz) / cluster.spread;
       // Points near the centroid are "easy" (high confidence); points out in
       // the overlap tails are "hard" — exactly the ones a classifier would hesitate on.
-      const confidence = clamp(0.97 - distNorm * 0.16 + gaussian(rng, 0, 0.04), 0.38, 0.995);
+      const confidence = clamp(0.97 - distNorm * 0.12 + gaussian(rng, 0, 0.04), 0.38, 0.995);
       points.push({
         id: `mock_flow_${String(idx).padStart(5, '0')}`,
         x,
         y,
+        z,
         label: cluster.label,
         confidence,
         flow_summary: flowSummary(rng, cluster),
@@ -209,6 +219,10 @@ function buildMetrics(rng: Rng): MetricsData {
       { condition: 'RTT +50ms',   accuracy: Number(clamp(accuracy - 0.04 - rng() * 0.02, 0.4, 1).toFixed(4)) },
       { condition: 'jitter +20ms', accuracy: Number(clamp(accuracy - 0.05 - rng() * 0.025, 0.4, 1).toFixed(4)) },
     ],
+    notes: {
+      macro_f1: 'Limited by video_conferencing class — only 8 training flows.',
+      inter_cos: 'Cross-class separation improves as SupCon loss converges.',
+    },
   };
 }
 
@@ -259,7 +273,7 @@ export function buildMockFlowDetail(point: UmapPoint, allPoints: UmapPoint[]): F
   const others = MOCK_CLASSES.filter((c) => c !== point.label);
   const distTo = (label: string) => {
     const oc = CLUSTERS.find((c) => c.label === label)!;
-    return Math.hypot(oc.center[0] - cluster.center[0], oc.center[1] - cluster.center[1]);
+    return Math.hypot(oc.center[0] - cluster.center[0], oc.center[1] - cluster.center[1], oc.center[2] - cluster.center[2]);
   };
   const ranked = [...others].sort((a, b) => distTo(a) - distTo(b));
   const remainder = 1 - point.confidence;
@@ -292,8 +306,8 @@ function nearestPoints(origin: UmapPoint, all: UmapPoint[], k: number): UmapPoin
   return [...all]
     .filter((p) => p.id !== origin.id)
     .sort((a, b) => {
-      const da = (a.x - origin.x) ** 2 + (a.y - origin.y) ** 2;
-      const db = (b.x - origin.x) ** 2 + (b.y - origin.y) ** 2;
+      const da = (a.x - origin.x) ** 2 + (a.y - origin.y) ** 2 + ((a.z ?? 0) - (origin.z ?? 0)) ** 2;
+      const db = (b.x - origin.x) ** 2 + (b.y - origin.y) ** 2 + ((b.z ?? 0) - (origin.z ?? 0)) ** 2;
       return da - db;
     })
     .slice(0, k);

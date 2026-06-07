@@ -49,8 +49,8 @@ export default function CurvesPanel() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-1.5">
-      <div className="min-h-0 flex-1">
+    <div className="flex flex-col gap-1.5">
+      <div style={{ height: 140, minHeight: 0 }}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={curves} margin={{ top: 6, right: 10, bottom: 0, left: -18 }}>
             <CartesianGrid stroke="var(--nj-border)" strokeDasharray="2 5" vertical={false} opacity={0.6} />

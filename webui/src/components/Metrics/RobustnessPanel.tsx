@@ -22,7 +22,7 @@ export default function RobustnessPanel() {
   const max = Math.max(...robustness.map((r) => r.accuracy), 0.01);
 
   return (
-    <div className="nj-scroll flex h-full flex-col gap-3 overflow-y-auto pr-1">
+    <div className="flex flex-col gap-3 pr-1">
       {robustness.map((r, i) => {
         const drop = baseline - r.accuracy;
         const color = drop > 0.08 ? WARNING : ACCENT;

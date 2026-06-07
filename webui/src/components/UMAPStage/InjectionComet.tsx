@@ -36,11 +36,16 @@ export default function InjectionComet({ cameraRef }: { cameraRef: React.RefObje
 
     const rng = mulberry32(seedFromString(session.id));
     const angle = rng() * Math.PI * 2;
+    const angle2 = rng() * Math.PI * 2;
     const dist = camera.baseExtent * (2.4 + rng() * 0.8);
-    const target = { x: projection.x, y: projection.y };
-    const start = { x: target.x + Math.cos(angle) * dist, y: target.y + Math.sin(angle) * dist };
+    const target = { x: projection.x, y: projection.y, z: 0 };
+    const start = {
+      x: target.x + Math.cos(angle) * dist,
+      y: target.y + Math.sin(angle) * dist * 0.5,
+      z: Math.sin(angle2) * dist * 0.4,
+    };
 
-    const trail: { x: number; y: number }[] = [];
+    const trail: { x: number; y: number; z: number }[] = [];
     let cancelled = false;
     const t0 = performance.now();
 
@@ -62,11 +67,12 @@ export default function InjectionComet({ cameraRef }: { cameraRef: React.RefObje
       const e = easeOutCubic(t);
       const cx = start.x + (target.x - start.x) * e;
       const cy = start.y + (target.y - start.y) * e;
+      const cz = start.z + (target.z - start.z) * e;
 
-      trail.unshift({ x: cx, y: cy });
+      trail.unshift({ x: cx, y: cy, z: cz });
       if (trail.length > TRAIL_LEN) trail.length = TRAIL_LEN;
 
-      const head = camera.dataToScreen(cx, cy);
+      const head = camera.dataToScreen(cx, cy, cz);
       showEl(headRef.current, head.x, head.y, 1, 1);
 
       for (let i = 0; i < TRAIL_LEN; i++) {
@@ -76,7 +82,7 @@ export default function InjectionComet({ cameraRef }: { cameraRef: React.RefObje
           if (el) el.style.opacity = '0';
           continue;
         }
-        const sp = camera.dataToScreen(p.x, p.y);
+        const sp = camera.dataToScreen(p.x, p.y, p.z);
         const fade = (1 - i / TRAIL_LEN) ** 1.4;
         showEl(el, sp.x, sp.y, fade * 0.6, 1 - (i / TRAIL_LEN) * 0.75);
       }

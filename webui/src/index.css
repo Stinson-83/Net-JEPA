@@ -35,7 +35,7 @@ body {
    subtle full-page texture. Drawn once as an SVG data-uri so it costs nothing
    at runtime and never needs an asset request. */
 .nj-hex-grid {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath d='M28 0 L56 16 L56 50 L28 66 L0 50 L0 16 Z' fill='none' stroke='%231f2937' stroke-width='1' opacity='0.35'/%3E%3Cpath d='M28 66 L56 50 L56 84 L28 100 L0 84 L0 50 Z' fill='none' stroke='%231f2937' stroke-width='1' opacity='0.35'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath d='M28 0 L56 16 L56 50 L28 66 L0 50 L0 16 Z' fill='none' stroke='%231f2937' stroke-width='1' opacity='0.18'/%3E%3Cpath d='M28 66 L56 50 L56 84 L28 100 L0 84 L0 50 Z' fill='none' stroke='%231f2937' stroke-width='1' opacity='0.18'/%3E%3C/svg%3E");
   background-size: 56px 100px;
 }
 

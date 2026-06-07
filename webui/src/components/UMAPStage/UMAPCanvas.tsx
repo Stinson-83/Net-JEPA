@@ -10,45 +10,51 @@ const MAX_SPRITES = 96;
 const SESSION_RING_RGB = hexToRgb01('#7dd3fc');
 const HOVER_RGB: [number, number, number] = [1, 1, 1];
 
-// ── Shaders ────────────────────────────────────────────────────────────────
-// Both programs transform data-space coordinates straight to clip space via
-// `(position - center) / halfExtent` — a cheap two-uniform affine transform
-// that keeps the camera math identical (and therefore exactly in sync)
-// between the GPU and the CPU-side `Camera` class used by DOM overlays.
+// ── 3D Shaders ─────────────────────────────────────────────────────────────
+// Both programs transform 3D data-space coordinates to clip space via
+// the view-projection matrix uniform.
 
 const POINT_VERT = `
 precision highp float;
-attribute vec2 aPosition;
+attribute vec3 aPosition;
 attribute vec3 aColor;
 attribute float aClassIndex;
 attribute float aConfidence;
-uniform vec2 uCenter;
-uniform vec2 uHalfExtent;
+uniform mat4 uVP;
 uniform float uTime;
 uniform float uPixelRatio;
 uniform float uBaseSize;
 uniform float uClassFade[${MAX_CLASSES}];
+uniform float uClassAlpha[${MAX_CLASSES}];
 varying vec3 vColor;
 varying float vAlpha;
 void main() {
-  vec2 ndc = (aPosition - uCenter) / uHalfExtent;
-  gl_Position = vec4(ndc, 0.0, 1.0);
+  gl_Position = uVP * vec4(aPosition, 1.0);
 
   float fade = 1.0;
+  float densityAlpha = 1.0;
   for (int i = 0; i < ${MAX_CLASSES}; i++) {
-    if (abs(aClassIndex - float(i)) < 0.5) fade = uClassFade[i];
+    if (abs(aClassIndex - float(i)) < 0.5) {
+      fade = uClassFade[i];
+      densityAlpha = uClassAlpha[i];
+    }
   }
 
-  // Per-point pulse phase derived from position (no extra attribute needed) —
-  // keeps the cloud "breathing" without every point pulsing in lockstep.
-  float phase = fract(sin(aPosition.x * 12.9898 + aPosition.y * 78.233) * 43758.5453);
-  float pulse = 0.88 + 0.12 * sin(uTime * 1.35 + phase * 6.28318);
+  // Subtle per-point shimmer (much gentler than before)
+  float phase = fract(sin(aPosition.x * 12.9898 + aPosition.y * 78.233 + aPosition.z * 37.719) * 43758.5453);
+  float pulse = 0.94 + 0.06 * sin(uTime * 1.35 + phase * 6.28318);
 
-  float size = uBaseSize * (0.55 + aConfidence * 0.75) * pulse;
+  // Attenuate size by depth
+  float depth = gl_Position.w;
+  float depthScale = clamp(18.0 / max(depth, 1.0), 0.4, 2.0);
+
+  // ~2px base, modest confidence scaling
+  float size = uBaseSize * (0.7 + aConfidence * 0.3) * pulse * depthScale;
   gl_PointSize = max(size * uPixelRatio, 1.0);
 
   vColor = aColor;
-  vAlpha = fade * (0.32 + aConfidence * 0.62);
+  // Capped alpha: base ~0.5, confidence adds up to ~0.15, density scales it
+  vAlpha = fade * densityAlpha * (0.45 + aConfidence * 0.15);
 }`;
 
 const POINT_FRAG = `
@@ -59,31 +65,31 @@ void main() {
   vec2 uv = gl_PointCoord * 2.0 - 1.0;
   float d = length(uv);
   if (d > 1.0) discard;
-  float core = smoothstep(1.0, 0.1, d);
-  float halo = pow(max(1.0 - d, 0.0), 2.4);
-  gl_FragColor = vec4(vColor + halo * 0.4, core * vAlpha);
+  // Hard-ish core with very subtle edge softness — NOT a flare
+  float core = smoothstep(1.0, 0.35, d);
+  // Tiny halo — just enough to anti-alias, not enough to bloom
+  float halo = 0.08 * pow(max(1.0 - d, 0.0), 3.0);
+  gl_FragColor = vec4(vColor * (1.0 + halo), core * vAlpha);
 }`;
 
-// Generic "sprite" pass — reused for the selection ring, hover ring, and the
-// persistent rings around session-injected points. `aRing` switches between a
-// filled glow (0) and a donut outline (1) per-instance, in one draw call.
+// Sprite pass for selection ring, hover ring, session rings
 const SPRITE_VERT = `
 precision highp float;
-attribute vec2 aPosition;
+attribute vec3 aPosition;
 attribute vec3 aColor;
 attribute float aSize;
 attribute float aAlpha;
 attribute float aRing;
-uniform vec2 uCenter;
-uniform vec2 uHalfExtent;
+uniform mat4 uVP;
 uniform float uPixelRatio;
 varying vec3 vColor;
 varying float vAlpha;
 varying float vRing;
 void main() {
-  vec2 ndc = (aPosition - uCenter) / uHalfExtent;
-  gl_Position = vec4(ndc, 0.0, 1.0);
-  gl_PointSize = aSize * uPixelRatio;
+  gl_Position = uVP * vec4(aPosition, 1.0);
+  float depth = gl_Position.w;
+  float depthScale = clamp(18.0 / max(depth, 1.0), 0.4, 2.5);
+  gl_PointSize = aSize * uPixelRatio * depthScale;
   vColor = aColor;
   vAlpha = aAlpha;
   vRing = aRing;
@@ -107,8 +113,28 @@ void main() {
   gl_FragColor = vec4(vColor, a * vAlpha);
 }`;
 
+// Thin grid lines on the XY plane for 3D depth reference (dimmed to 50%)
+const GRID_VERT = `
+precision highp float;
+attribute vec3 aPosition;
+uniform mat4 uVP;
+varying float vAlpha;
+void main() {
+  gl_Position = uVP * vec4(aPosition, 1.0);
+  float dist = length(aPosition.xy);
+  vAlpha = 0.06 * smoothstep(20.0, 5.0, dist);
+}`;
+
+const GRID_FRAG = `
+precision highp float;
+varying float vAlpha;
+void main() {
+  gl_FragColor = vec4(0.3, 0.4, 0.5, vAlpha);
+}`;
+
 function baseSizeForZoom(zoom: number): number {
-  return Math.min(9, Math.max(3.4, 3.4 + Math.log2(Math.max(zoom, 1)) * 1.05));
+  // ~2px default at zoom=1, scales gently with zoom
+  return Math.min(5.5, Math.max(2.0, 2.0 + Math.log2(Math.max(zoom, 1)) * 0.7));
 }
 
 export interface HoverInfo {
@@ -119,35 +145,45 @@ export interface HoverInfo {
 interface Props {
   cameraRef: React.RefObject<Camera | null>;
   onHover: (info: HoverInfo | null) => void;
+  pointSize?: number;
+}
+
+/** Build a flat grid of lines on the XZ plane through y=0 */
+function buildGridGeometry(extent: number, step: number): Float32Array {
+  const lines: number[] = [];
+  const n = Math.ceil(extent / step);
+  for (let i = -n; i <= n; i++) {
+    const v = i * step;
+    // Lines along X
+    lines.push(-extent, 0, v, extent, 0, v);
+    // Lines along Z
+    lines.push(v, 0, -extent, v, 0, extent);
+  }
+  return new Float32Array(lines);
 }
 
 /**
- * The WebGL theatre itself. One regl context, two draw passes:
- *   1. `drawPoints`  — the full cloud (static buffers; rebuilt only when the
- *      dataset changes), additive-blended glow circles, class-fade + pulse
- *      computed entirely on the GPU from uniforms so 50k points cost nothing
- *      extra to animate.
- *   2. `drawSprites` — a tiny (≤96-instance) dynamic buffer rebuilt every
- *      frame for the selection ring, hover ring, and session-injection rings.
+ * The WebGL theatre itself — now in 3D! One regl context, three draw passes:
+ *   1. `drawGrid`   — subtle reference grid on the ground plane
+ *   2. `drawPoints` — the full cloud with 3D perspective
+ *   3. `drawSprites` — selection/hover/session rings
  *
  * Camera state lives in the shared `Camera` instance (see camera.ts) so DOM
  * overlays — kNN lines, the comet, the minimap, the tooltip — read the exact
  * same transform the GPU used for that frame.
  */
-export default function UMAPCanvas({ cameraRef, onHover }: Props) {
+export default function UMAPCanvas({ cameraRef, onHover, pointSize }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const points = useStore((s) => s.bundle?.points ?? EMPTY_POINTS);
   const classes = useStore((s) => s.manifest?.classes ?? EMPTY_CLASSES);
 
-  // Mutable mirrors of store state the render loop needs every frame, kept as
-  // refs so changing them doesn't tear down / rebuild the regl context.
   const hiddenRef = useRef<Set<string>>(new Set());
   const fadeRef = useRef<Float32Array>(new Float32Array(MAX_CLASSES).fill(1));
   const selectedIdRef = useRef<string | null>(null);
   const hoveredIdRef = useRef<string | null>(null);
-  const sessionPosRef = useRef<{ x: number; y: number; label: string }[]>([]);
+  const sessionPosRef = useRef<{ x: number; y: number; z: number; label: string }[]>([]);
   const pendingHoverRef = useRef<{ mx: number; my: number } | null>(null);
 
   const hidden = useStore((s) => s.hiddenClasses);
@@ -159,7 +195,7 @@ export default function UMAPCanvas({ cameraRef, onHover }: Props) {
   useEffect(() => {
     sessionPosRef.current = sessions
       .filter((s) => s.projection)
-      .map((s) => ({ x: s.projection!.x, y: s.projection!.y, label: s.projection!.label }));
+      .map((s) => ({ x: s.projection!.x, y: s.projection!.y, z: 0, label: s.projection!.label }));
   }, [sessions]);
 
   useEffect(() => {
@@ -176,14 +212,18 @@ export default function UMAPCanvas({ cameraRef, onHover }: Props) {
 
     // ── bounds + initial framing ───────────────────────────────────────────
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    let minZ = Infinity, maxZ = -Infinity;
     for (const p of points) {
       if (p.x < minX) minX = p.x;
       if (p.x > maxX) maxX = p.x;
       if (p.y < minY) minY = p.y;
       if (p.y > maxY) maxY = p.y;
+      const z = p.z ?? 0;
+      if (z < minZ) minZ = z;
+      if (z > maxZ) maxZ = z;
     }
     camera.setViewport(container.clientWidth, container.clientHeight);
-    camera.fitToBounds(minX, maxX, minY, maxY);
+    camera.fitToBounds(minX, maxX, minY, maxY, minZ, maxZ);
 
     const pointById = new Map<string, UmapPoint>();
     for (const p of points) pointById.set(p.id, p);
@@ -192,18 +232,19 @@ export default function UMAPCanvas({ cameraRef, onHover }: Props) {
     const regl = createREGL({
       canvas,
       pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
-      attributes: { alpha: true, antialias: true, premultipliedAlpha: false, depth: false },
+      attributes: { alpha: true, antialias: true, premultipliedAlpha: false, depth: true },
     });
 
     const n = points.length;
-    const positions = new Float32Array(n * 2);
+    const positions = new Float32Array(n * 3);
     const colorsArr = new Float32Array(n * 3);
     const classIdxArr = new Float32Array(n);
     const confArr = new Float32Array(n);
     for (let i = 0; i < n; i++) {
       const p = points[i];
-      positions[i * 2] = p.x;
-      positions[i * 2 + 1] = p.y;
+      positions[i * 3] = p.x;
+      positions[i * 3 + 1] = p.y;
+      positions[i * 3 + 2] = p.z ?? 0;
       const idx = classes.indexOf(p.label);
       classIdxArr[i] = idx === -1 ? 0 : Math.min(idx, MAX_CLASSES - 1);
       const [r, g, b] = hexToRgb01(classColor(classes, p.label).hex);
@@ -213,12 +254,24 @@ export default function UMAPCanvas({ cameraRef, onHover }: Props) {
       confArr[i] = p.confidence;
     }
 
-    // regl has no shorthand for array uniforms — per its docs, each element
-    // of `uniform float uClassFade[N]` must be bound under its own bracketed
-    // key (`"uClassFade[0]"`, `"uClassFade[1]"`, …), not as a single array.
+    // Compute per-class density alpha: rare classes brighter, dense classes dimmer
+    const classCounts = new Map<string, number>();
+    for (const p of points) classCounts.set(p.label, (classCounts.get(p.label) ?? 0) + 1);
+    const countValues = [...classCounts.values()];
+    countValues.sort((a, b) => a - b);
+    const medianCount = countValues[Math.floor(countValues.length / 2)] || 1;
+    const classAlphaArr = new Float32Array(MAX_CLASSES);
+    for (let i = 0; i < MAX_CLASSES; i++) {
+      const label = classes[i];
+      if (!label) { classAlphaArr[i] = 1; continue; }
+      const cnt = classCounts.get(label) ?? 1;
+      classAlphaArr[i] = Math.max(0.25, Math.min(1.0, Math.sqrt(medianCount / cnt)));
+    }
+
     const classFadeUniforms: Record<string, () => number> = {};
     for (let i = 0; i < MAX_CLASSES; i++) {
       classFadeUniforms[`uClassFade[${i}]`] = () => fadeRef.current[i];
+      classFadeUniforms[`uClassAlpha[${i}]`] = () => classAlphaArr[i];
     }
 
     const positionBuffer = regl.buffer(positions);
@@ -226,41 +279,60 @@ export default function UMAPCanvas({ cameraRef, onHover }: Props) {
     const classBuffer = regl.buffer(classIdxArr);
     const confBuffer = regl.buffer(confArr);
 
-    const ADDITIVE_BLEND = {
+    // Grid geometry
+    const gridExtent = Math.max(maxX - minX, maxY - minY, maxZ - minZ) * 0.6;
+    const gridStep = Math.max(2, Math.round(gridExtent / 6));
+    const gridPositions = buildGridGeometry(gridExtent, gridStep);
+    const gridBuffer = regl.buffer(gridPositions);
+
+    // Standard alpha blending — NOT additive. Additive smears clusters into white.
+    const STANDARD_BLEND = {
       enable: true,
-      func: { srcRGB: 'src alpha', srcAlpha: 1, dstRGB: 'one', dstAlpha: 'one minus src alpha' },
+      func: { src: 'src alpha', dst: 'one minus src alpha' },
     } as const;
+
+    const drawGrid = regl({
+      vert: GRID_VERT,
+      frag: GRID_FRAG,
+      attributes: { aPosition: { buffer: gridBuffer, size: 3 } },
+      uniforms: {
+        uVP: () => camera!.vpMatrix,
+      },
+      count: gridPositions.length / 3,
+      primitive: 'lines',
+      blend: { enable: true, func: { src: 'src alpha', dst: 'one minus src alpha' } },
+      depth: { enable: true, mask: false },
+    });
 
     const drawPoints = regl({
       vert: POINT_VERT,
       frag: POINT_FRAG,
       attributes: {
-        aPosition: positionBuffer,
+        aPosition: { buffer: positionBuffer, size: 3 },
         aColor: colorBuffer,
         aClassIndex: classBuffer,
         aConfidence: confBuffer,
       },
       uniforms: {
-        uCenter: () => [camera!.cx, camera!.cy],
-        uHalfExtent: () => [camera!.halfExtentX, camera!.halfExtentY],
+        uVP: () => camera!.vpMatrix,
         uTime: ({ time }) => time,
         uPixelRatio: regl.context('pixelRatio'),
-        uBaseSize: () => baseSizeForZoom(camera!.zoom),
+        uBaseSize: () => pointSize ?? baseSizeForZoom(camera!.zoom),
         ...classFadeUniforms,
       },
       count: n,
       primitive: 'points',
-      blend: ADDITIVE_BLEND,
-      depth: { enable: false },
+      blend: STANDARD_BLEND,
+      depth: { enable: true, mask: false },
     });
 
-    // dynamic sprite buffers (rebuilt every frame; tiny — ≤ MAX_SPRITES instances)
-    const spritePosArr = new Float32Array(MAX_SPRITES * 2);
+    // dynamic sprite buffers
+    const spritePosArr = new Float32Array(MAX_SPRITES * 3);
     const spriteColorArr = new Float32Array(MAX_SPRITES * 3);
     const spriteSizeArr = new Float32Array(MAX_SPRITES);
     const spriteAlphaArr = new Float32Array(MAX_SPRITES);
     const spriteRingArr = new Float32Array(MAX_SPRITES);
-    const spritePosBuf = regl.buffer({ length: MAX_SPRITES * 2 * 4, usage: 'dynamic' });
+    const spritePosBuf = regl.buffer({ length: MAX_SPRITES * 3 * 4, usage: 'dynamic' });
     const spriteColorBuf = regl.buffer({ length: MAX_SPRITES * 3 * 4, usage: 'dynamic' });
     const spriteSizeBuf = regl.buffer({ length: MAX_SPRITES * 4, usage: 'dynamic' });
     const spriteAlphaBuf = regl.buffer({ length: MAX_SPRITES * 4, usage: 'dynamic' });
@@ -271,35 +343,32 @@ export default function UMAPCanvas({ cameraRef, onHover }: Props) {
       vert: SPRITE_VERT,
       frag: SPRITE_FRAG,
       attributes: {
-        aPosition: spritePosBuf,
+        aPosition: { buffer: spritePosBuf, size: 3 },
         aColor: spriteColorBuf,
         aSize: spriteSizeBuf,
         aAlpha: spriteAlphaBuf,
         aRing: spriteRingBuf,
       },
       uniforms: {
-        uCenter: () => [camera!.cx, camera!.cy],
-        uHalfExtent: () => [camera!.halfExtentX, camera!.halfExtentY],
+        uVP: () => camera!.vpMatrix,
         uPixelRatio: regl.context('pixelRatio'),
       },
       count: () => spriteCount,
       primitive: 'points',
-      blend: ADDITIVE_BLEND,
-      depth: { enable: false },
+      blend: STANDARD_BLEND,
+      depth: { enable: true, mask: false },
     });
 
     // ── interaction ────────────────────────────────────────────────────────
-    const hitRadiusData = () => 9 * ((2 * camera!.halfExtentX) / Math.max(container!.clientWidth, 1));
-
-    const findNearest = (x: number, y: number): UmapPoint | null => {
-      const maxD = hitRadiusData();
-      const maxD2 = maxD * maxD;
+    const findNearest = (mx: number, my: number): UmapPoint | null => {
+      // Project all points to screen and find closest to mouse
       let best: UmapPoint | null = null;
-      let bestD2 = maxD2;
+      let bestD2 = 20 * 20; // 20px hit radius
       for (const p of points) {
         if (hiddenRef.current.has(p.label)) continue;
-        const dx = p.x - x;
-        const dy = p.y - y;
+        const s = camera!.dataToScreen(p.x, p.y, p.z ?? 0);
+        const dx = s.x - mx;
+        const dy = s.y - my;
         const d2 = dx * dx + dy * dy;
         if (d2 < bestD2) { bestD2 = d2; best = p; }
       }
@@ -307,6 +376,7 @@ export default function UMAPCanvas({ cameraRef, onHover }: Props) {
     };
 
     let isDragging = false;
+    let isOrbiting = false;
     let dragMoved = false;
     let lastClientX = 0;
     let lastClientY = 0;
@@ -326,19 +396,26 @@ export default function UMAPCanvas({ cameraRef, onHover }: Props) {
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const { mx, my } = localPos(e);
       const factor = Math.exp(-e.deltaY * 0.0014);
-      camera!.zoomAt(mx, my, factor);
+      camera!.zoomAt(0, 0, factor);
+      const { mx, my } = localPos(e);
       pendingHoverRef.current = { mx, my };
     };
 
     const onMouseDown = (e: MouseEvent) => {
-      if (e.button !== 0) return;
-      isDragging = true;
+      if (e.button === 2 || (e.button === 0 && e.shiftKey)) {
+        // Right-click or shift+click: pan
+        isDragging = true;
+        isOrbiting = false;
+      } else if (e.button === 0) {
+        // Left-click: orbit
+        isDragging = true;
+        isOrbiting = true;
+      }
       dragMoved = false;
       lastClientX = e.clientX;
       lastClientY = e.clientY;
-      canvas!.style.cursor = 'grabbing';
+      canvas!.style.cursor = isOrbiting ? 'grabbing' : 'move';
     };
 
     const onMouseMove = (e: MouseEvent) => {
@@ -346,7 +423,11 @@ export default function UMAPCanvas({ cameraRef, onHover }: Props) {
         const dx = e.clientX - lastClientX;
         const dy = e.clientY - lastClientY;
         if (Math.abs(dx) + Math.abs(dy) > 2) dragMoved = true;
-        camera!.panByPixels(dx, dy);
+        if (isOrbiting) {
+          camera!.orbit(dx, dy);
+        } else {
+          camera!.panByPixels(dx, dy);
+        }
         lastClientX = e.clientX;
         lastClientY = e.clientY;
         clearHover();
@@ -359,8 +440,7 @@ export default function UMAPCanvas({ cameraRef, onHover }: Props) {
     const onMouseUp = (e: MouseEvent) => {
       if (isDragging && !dragMoved) {
         const { mx, my } = localPos(e);
-        const { x, y } = camera!.screenToData(mx, my);
-        const hit = findNearest(x, y);
+        const hit = findNearest(mx, my);
         useStore.getState().selectFlow(hit ? hit.id : null);
       }
       isDragging = false;
@@ -374,53 +454,59 @@ export default function UMAPCanvas({ cameraRef, onHover }: Props) {
       canvas!.style.cursor = 'grab';
     };
 
+    const onContextMenu = (e: Event) => {
+      e.preventDefault();
+    };
+
     canvas.style.cursor = 'grab';
     canvas.addEventListener('wheel', onWheel, { passive: false });
     canvas.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
     canvas.addEventListener('mouseleave', onMouseLeave);
+    canvas.addEventListener('contextmenu', onContextMenu);
 
     // ── render loop ────────────────────────────────────────────────────────
     const frameLoop = regl.frame(({ time }) => {
       camera!.setViewport(container!.clientWidth, container!.clientHeight);
       camera!.tick(performance.now());
+      camera!.updateMatrices();
 
-      // class-visibility fade — smoothly lerp toward 0/1 each frame so
-      // toggling a legend entry "breathes" the cloud rather than popping it
+      // class-visibility fade
       for (let i = 0; i < MAX_CLASSES; i++) {
         const label = classes[i];
         const target = label && hiddenRef.current.has(label) ? 0 : 1;
         fadeRef.current[i] += (target - fadeRef.current[i]) * 0.12;
       }
 
-      // resolve any pending hover hit-test (throttled to once per frame)
+      // resolve pending hover
       if (pendingHoverRef.current && !isDragging) {
         const { mx, my } = pendingHoverRef.current;
         pendingHoverRef.current = null;
-        const { x, y } = camera!.screenToData(mx, my);
-        const hit = findNearest(x, y);
+        const hit = findNearest(mx, my);
         const id = hit?.id ?? null;
         if (id !== hoveredIdRef.current) {
           hoveredIdRef.current = id;
           useStore.getState().setHoveredFlow(id);
         }
-        onHover(hit ? { point: hit, screen: camera!.dataToScreen(hit.x, hit.y) } : null);
+        onHover(hit ? { point: hit, screen: camera!.dataToScreen(hit.x, hit.y, hit.z ?? 0) } : null);
       } else if (hoveredIdRef.current) {
         const p = pointById.get(hoveredIdRef.current);
-        if (p) onHover({ point: p, screen: camera!.dataToScreen(p.x, p.y) });
+        if (p) onHover({ point: p, screen: camera!.dataToScreen(p.x, p.y, p.z ?? 0) });
       }
 
       regl.clear({ color: [0, 0, 0, 0], depth: 1 });
+      drawGrid();
       drawPoints();
 
-      // ── build this frame's sprite list (selection / hover / session rings) ──
+      // ── build sprite list ──
       spriteCount = 0;
-      const pushSprite = (x: number, y: number, color: [number, number, number], size: number, alpha: number, ring: number) => {
+      const pushSprite = (x: number, y: number, z: number, color: [number, number, number], size: number, alpha: number, ring: number) => {
         if (spriteCount >= MAX_SPRITES) return;
         const i = spriteCount++;
-        spritePosArr[i * 2] = x;
-        spritePosArr[i * 2 + 1] = y;
+        spritePosArr[i * 3] = x;
+        spritePosArr[i * 3 + 1] = y;
+        spritePosArr[i * 3 + 2] = z;
         spriteColorArr[i * 3] = color[0];
         spriteColorArr[i * 3 + 1] = color[1];
         spriteColorArr[i * 3 + 2] = color[2];
@@ -431,7 +517,7 @@ export default function UMAPCanvas({ cameraRef, onHover }: Props) {
 
       for (const s of sessionPosRef.current) {
         const pulse = 0.55 + 0.35 * Math.sin(time * 1.05 + s.x * 1.7);
-        pushSprite(s.x, s.y, SESSION_RING_RGB, 24 * pulse + 8, 0.5 + 0.25 * pulse, 1);
+        pushSprite(s.x, s.y, s.z, SESSION_RING_RGB, 24 * pulse + 8, 0.5 + 0.25 * pulse, 1);
       }
 
       const selId = selectedIdRef.current;
@@ -440,17 +526,17 @@ export default function UMAPCanvas({ cameraRef, onHover }: Props) {
         if (p) {
           const pulse = 0.7 + 0.3 * Math.sin(time * 2.6);
           const [r, g, b] = hexToRgb01(classColor(classes, p.label).hex);
-          pushSprite(p.x, p.y, [r, g, b], 30 * pulse + 6, 0.95, 1);
+          pushSprite(p.x, p.y, p.z ?? 0, [r, g, b], 30 * pulse + 6, 0.95, 1);
         }
       }
       const hovId = hoveredIdRef.current;
       if (hovId && hovId !== selId) {
         const p = pointById.get(hovId);
-        if (p) pushSprite(p.x, p.y, HOVER_RGB, 22, 0.85, 1);
+        if (p) pushSprite(p.x, p.y, p.z ?? 0, HOVER_RGB, 22, 0.85, 1);
       }
 
       if (spriteCount > 0) {
-        spritePosBuf.subdata(spritePosArr.subarray(0, spriteCount * 2));
+        spritePosBuf.subdata(spritePosArr.subarray(0, spriteCount * 3));
         spriteColorBuf.subdata(spriteColorArr.subarray(0, spriteCount * 3));
         spriteSizeBuf.subdata(spriteSizeArr.subarray(0, spriteCount));
         spriteAlphaBuf.subdata(spriteAlphaArr.subarray(0, spriteCount));
@@ -466,6 +552,7 @@ export default function UMAPCanvas({ cameraRef, onHover }: Props) {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
       canvas.removeEventListener('mouseleave', onMouseLeave);
+      canvas.removeEventListener('contextmenu', onContextMenu);
       regl.destroy();
     };
   }, [points, classes, cameraRef, onHover]);

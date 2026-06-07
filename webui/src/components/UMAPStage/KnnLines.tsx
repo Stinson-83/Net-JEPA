@@ -43,11 +43,11 @@ export default function KnnLines({ cameraRef }: { cameraRef: React.RefObject<Cam
       raf = requestAnimationFrame(draw);
       const camera = cameraRef.current;
       if (!camera) return;
-      const c = camera.dataToScreen(center.x, center.y);
+      const c = camera.dataToScreen(center.x, center.y, center.z ?? 0);
       neighbors.forEach((p, i) => {
         const el = lineRefs.current[i];
         if (!el) return;
-        const s = camera.dataToScreen(p.x, p.y);
+        const s = camera.dataToScreen(p.x, p.y, p.z ?? 0);
         el.setAttribute('x1', String(c.x));
         el.setAttribute('y1', String(c.y));
         el.setAttribute('x2', String(s.x));

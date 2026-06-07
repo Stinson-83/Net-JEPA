@@ -8,6 +8,8 @@ import PipelineTheatre from './components/PipelineTheatre/PipelineTheatre';
 import Inspector from './components/Inspector/Inspector';
 import Metrics from './components/Metrics/Metrics';
 import PcapModal from './components/PcapModal/PcapModal';
+import AutoDemoController from './components/AutoDemoController';
+import PhaseStrip from './components/TopBar/PhaseStrip';
 
 /**
  * Single-screen layout — fills the viewport with no page scroll at 1440p:
@@ -26,6 +28,7 @@ import PcapModal from './components/PcapModal/PcapModal';
  */
 export default function App() {
   const bootstrap = useStore((s) => s.bootstrap);
+  const theatreCollapsed = useStore((s) => s.theatreCollapsed);
 
   useEffect(() => {
     void bootstrap();
@@ -51,15 +54,22 @@ export default function App() {
     <MotionConfig reducedMotion="user">
       <div className="flex h-screen flex-col overflow-hidden bg-[var(--nj-bg)]">
         <TopBar />
+        <PhaseStrip />
         <main className="flex min-h-0 flex-1 gap-3 p-3">
           <div className="min-h-0 min-w-0" style={{ flex: '3 3 0%' }}>
             <UMAPStage />
           </div>
           <div className="flex min-h-0 min-w-0 flex-col gap-3" style={{ flex: '2 2 0%' }}>
-            <div className="min-h-0" style={{ flex: '45 45 0%' }}>
-              <PipelineTheatre />
-            </div>
-            <div className="min-h-0" style={{ flex: '30 30 0%' }}>
+            {theatreCollapsed ? (
+              <div className="h-12 shrink-0">
+                <PipelineTheatre />
+              </div>
+            ) : (
+              <div className="min-h-0" style={{ flex: '45 45 0%' }}>
+                <PipelineTheatre />
+              </div>
+            )}
+            <div className="min-h-0" style={{ flex: theatreCollapsed ? '50 50 0%' : '30 30 0%' }}>
               <Inspector />
             </div>
             <div className="min-h-0" style={{ flex: '25 25 0%' }}>
@@ -68,6 +78,7 @@ export default function App() {
           </div>
         </main>
         <PcapModal />
+        <AutoDemoController />
       </div>
     </MotionConfig>
   );
