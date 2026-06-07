@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useStore, PIPELINE_STAGES } from '../state/store';
+import { useStore, PIPELINE_STAGES, EMPTY_POINTS } from '../state/store';
 
 const IDLE_BEFORE_AUTO = 3_000;    // ms idle before first auto-pick
 const PAUSE_AFTER_USER = 15_000;   // ms pause after any real user interaction
@@ -14,7 +14,11 @@ const STAGE_MS = 460;
  */
 export default function AutoDemoController() {
   const autoDemo = useStore((s) => s.autoDemo);
-  const points = useStore((s) => s.bundle?.points ?? []);
+  // NB: must be the shared stable empty array, not a fresh `?? []`, or this
+  // selector returns a new reference every render while the bundle is still
+  // loading — which useSyncExternalStore reads as an endless store change
+  // ("Maximum update depth exceeded"). See EMPTY_POINTS in the store.
+  const points = useStore((s) => s.bundle?.points ?? EMPTY_POINTS);
   const pipelinePlaying = useStore((s) => s.pipelinePlaying);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
