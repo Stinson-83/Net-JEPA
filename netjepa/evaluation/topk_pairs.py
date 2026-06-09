@@ -15,7 +15,6 @@ def topk_pairs_accuracy(embeddings: np.ndarray, k: int = 5) -> float:
         return 0.0
 
     view_a = emb_norm[0::2][:n_pairs]
-    view_b = emb_norm[1::2][:n_pairs]
 
     # Cosine similarity = dot product on unit vectors
     sim_matrix = view_a @ emb_norm.T   # (n_pairs, n_total)

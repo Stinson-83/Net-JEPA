@@ -13,7 +13,9 @@ from ..loss.supcon      import supcon_loss
 from ..data.dataset     import FlowDataset
 from ..training.phase1  import _set_seeds
 from ..utils.io         import save_checkpoint, load_checkpoint
-from ..utils.logging    import init_wandb, log_metrics
+from ..utils.logging    import init_wandb, log_metrics, get_logger
+
+_log = get_logger('training.phase2b')
 
 
 class _ProjHead(nn.Module):
@@ -96,10 +98,10 @@ def train_phase2b(processed_dir: str,
 
         scheduler.step()
         avg = total_loss / len(loader)
-        print(f'[Phase2b {epoch:03d}] loss={avg:.4f}')
+        _log.info('[%03d] loss=%.4f', epoch, avg)
         if use_wandb:
             log_metrics({'phase2b/loss': avg}, step=epoch)
 
     # Save encoder only (projection head is discarded)
     save_checkpoint(model, optimizer, epoch, {}, Path(ckpt_dir) / 'final.pt')
-    print(f'Checkpoint saved → {Path(ckpt_dir) / "final.pt"}')
+    _log.info('Checkpoint saved → %s', Path(ckpt_dir) / 'final.pt')

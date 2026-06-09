@@ -1,10 +1,18 @@
 from __future__ import annotations
+from pathlib import Path
 import pandas as pd
 from typing import Any
 
+from ..utils.logging import get_logger
+
+# Defaults — overridable per-call (and from netjepa/configs/default.yaml via
+# preprocess.run_pipeline). Lowering MIN_PACKETS recovers the many short flows
+# the 10-packet floor used to discard outright.
 FLOW_TIMEOUT = 30.0
-MIN_PACKETS  = 10
+MIN_PACKETS  = 5
 MAX_PACKETS  = 64
+
+_log = get_logger('data.flow_builder')
 
 
 def _flow_key(row) -> tuple:
@@ -22,7 +30,10 @@ def _identify_client(packets: list[dict]) -> str:
 
 
 def extract_flows(df: pd.DataFrame, app_label: str, category_label: str,
-                  source_file: str) -> list[dict[str, Any]]:
+                  source_file: str,
+                  min_packets: int = MIN_PACKETS,
+                  max_packets: int = MAX_PACKETS,
+                  flow_timeout: float = FLOW_TIMEOUT) -> list[dict[str, Any]]:
     records = df.to_dict('records')
     active: dict[tuple, list[dict]] = {}
     last_time: dict[tuple, float] = {}
@@ -32,7 +43,7 @@ def extract_flows(df: pd.DataFrame, app_label: str, category_label: str,
         key = _flow_key(row)
         t   = row['time']
 
-        if key in active and (t - last_time[key]) > FLOW_TIMEOUT:
+        if key in active and (t - last_time[key]) > flow_timeout:
             completed.append(active.pop(key))
 
         active.setdefault(key, []).append(row)
@@ -42,10 +53,12 @@ def extract_flows(df: pd.DataFrame, app_label: str, category_label: str,
         completed.append(pkts)
 
     flows = []
+    n_dropped = 0
     for pkts in completed:
-        if len(pkts) < MIN_PACKETS:
+        if len(pkts) < min_packets:
+            n_dropped += 1
             continue
-        pkts = pkts[:MAX_PACKETS]
+        pkts = pkts[:max_packets]
         client_ip = _identify_client(pkts)
         first = pkts[0]
         flows.append({
@@ -60,4 +73,7 @@ def extract_flows(df: pd.DataFrame, app_label: str, category_label: str,
             'category_label': category_label,
             'source_file':    source_file,
         })
-    return flows
+    if n_dropped:
+        _log.debug('%s: kept %d flows, dropped %d with <%d packets',
+                   Path(source_file).name, len(flows), n_dropped, min_packets)
+    return flows, n_dropped

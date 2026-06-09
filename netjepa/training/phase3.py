@@ -7,14 +7,15 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from tqdm import tqdm
 
 from ..model.netjepa       import NetJEPA
 from ..downstream.classifier import LinearProbe, ShallowMLP, KNNClassifier
 from ..data.dataset        import FlowDataset
 from ..training.phase1     import _set_seeds
 from ..utils.io            import save_checkpoint, load_checkpoint
-from ..utils.logging       import init_wandb, log_metrics
+from ..utils.logging       import init_wandb, log_metrics, get_logger
+
+_log = get_logger('training.phase3')
 
 
 def _freeze_pretrained(model: NetJEPA) -> None:
@@ -87,12 +88,12 @@ def train_phase3(processed_dir: str, ckpt_dir: str = 'checkpoints/phase3',
     knn_preds = knn.predict(test_embs)
     from sklearn.metrics import accuracy_score
     results['knn_accuracy'] = accuracy_score(test_labels, knn_preds)
-    print(f'kNN accuracy: {results["knn_accuracy"]:.4f}')
+    _log.info('kNN accuracy: %.4f', results['knn_accuracy'])
 
     # Persist the fitted kNN for server-side live inference
     import joblib
     joblib.dump(knn.clf, Path(ckpt_dir) / 'knn.joblib')
-    print(f'kNN index saved → {Path(ckpt_dir) / "knn.joblib"}')
+    _log.info('kNN index saved → %s', Path(ckpt_dir) / 'knn.joblib')
 
     criterion = nn.CrossEntropyLoss()
 
@@ -132,7 +133,7 @@ def train_phase3(processed_dir: str, ckpt_dir: str = 'checkpoints/phase3',
                 correct += (preds == lbl).sum().item()
                 total   += lbl.size(0)
         acc = correct / max(total, 1)
-        print(f'{tag} accuracy: {acc:.4f}')
+        _log.info('%s accuracy: %.4f', tag, acc)
         return acc
 
     results['linear_probe_accuracy'] = _train_head(

@@ -1,23 +1,22 @@
 """Phase 2: Embedding refinement with frozen EMA target."""
 from __future__ import annotations
-import random
 from pathlib import Path
 
-import numpy as np
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from ..model.netjepa    import NetJEPA
-from ..model.encoders   import sinusoidal_pe
 from ..loss.vicreg      import vicreg_loss
 from ..loss.contrastive import generate_pseudo_labels, dbscan_contrastive_loss
 from ..loss.composite   import CompositeLoss
 from ..data.dataset     import FlowDataset
 from ..training.phase1  import _set_seeds, _adaptive_mask, _extract_embeddings_subset
 from ..utils.io         import save_checkpoint, load_checkpoint
-from ..utils.logging    import init_wandb, log_metrics
+from ..utils.logging    import init_wandb, log_metrics, get_logger
+
+_log = get_logger('training.phase2')
 
 
 def train_phase2(processed_dir: str, ckpt_dir: str = 'checkpoints/phase2',
@@ -28,8 +27,8 @@ def train_phase2(processed_dir: str, ckpt_dir: str = 'checkpoints/phase2',
                  vicreg_alpha: float = 25.0, vicreg_beta: float = 25.0,
                  vicreg_gamma: float = 1.0,
                  lambda1: float = 1.0, lambda2: float = 0.3,
-                 dbscan_eps: float = 0.5, dbscan_min_samples: int = 5,
-                 dbscan_refresh: int = 5, dbscan_subsample: float = 0.02,
+                 dbscan_eps: float = 0.05, dbscan_min_samples: int = 5,
+                 dbscan_refresh: int = 5, dbscan_subsample: float = 1.0,
                  use_wandb: bool = False,
                  aug_kwargs: dict | None = None,
                  **model_kwargs) -> NetJEPA:
@@ -70,11 +69,18 @@ def train_phase2(processed_dir: str, ckpt_dir: str = 'checkpoints/phase2',
     pseudo_valid = False
 
     for epoch in range(epochs):
+        # Refresh DBSCAN pseudo labels — keyed by true dataset index (see phase1).
         if epoch % dbscan_refresh == 0:
-            embs  = _extract_embeddings_subset(model, dataset, dbscan_subsample, device)
-            pls   = generate_pseudo_labels(embs, dbscan_min_samples, dbscan_eps)
-            pseudo_global = {i: int(pls[i]) for i in range(len(pls))}
-            pseudo_valid  = True
+            embs, sub_idxs = _extract_embeddings_subset(model, dataset, dbscan_subsample, device)
+            pls = generate_pseudo_labels(embs, dbscan_min_samples, dbscan_eps)
+            pseudo_global = {sub_idxs[i]: int(pls[i]) for i in range(len(pls))}
+            n_clusters = len({l for l in pls if l >= 0})
+            # Skip the contrastive term on a degenerate single-cluster labelling
+            # (see phase1); lower dbscan_eps if this keeps logging 1 cluster.
+            pseudo_valid = n_clusters >= 2
+            _log.info('[%03d] DBSCAN: %d flows → %d clusters, %d noise (contrastive %s)',
+                      epoch, len(pls), n_clusters, int((pls < 0).sum()),
+                      'ON' if pseudo_valid else 'OFF')
 
         model.train()
         total_loss_accum = 0.0
@@ -108,10 +114,10 @@ def train_phase2(processed_dir: str, ckpt_dir: str = 'checkpoints/phase2',
             if pseudo_valid:
                 with torch.no_grad():
                     flow_embs = model.forward_downstream(cln_pkt, cln_ctx, cln_msk)
-                batch_pl = torch.full((flow_embs.size(0),), -1,
-                                      dtype=torch.long, device=device)
-                for bi in range(min(flow_embs.size(0), len(pseudo_global))):
-                    batch_pl[bi] = pseudo_global.get(bi, -1)
+                # Look each flow's cluster up by its true dataset index.
+                batch_pl = torch.tensor(
+                    [pseudo_global.get(int(fi), -1) for fi in batch['flow_idx']],
+                    dtype=torch.long, device=device)
                 contrast_val = dbscan_contrastive_loss(flow_embs, batch_pl)
 
             total = composite(vic_loss, contrast_val, pseudo_valid)
@@ -129,8 +135,8 @@ def train_phase2(processed_dir: str, ckpt_dir: str = 'checkpoints/phase2',
         avg_loss = total_loss_accum / max(n_batches, 1)
         epoch_metrics['total_loss'] = avg_loss
 
-        print(f'[Phase2 {epoch:03d}] loss={avg_loss:.4f} '
-              f'inv={epoch_metrics.get("invariance",0):.4f}')
+        _log.info('[%03d] loss=%.4f inv=%.4f', epoch, avg_loss,
+                  epoch_metrics.get('invariance', 0))
 
         if use_wandb:
             log_metrics(epoch_metrics, step=epoch)

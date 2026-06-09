@@ -11,10 +11,13 @@ from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 from .parser       import parse_csv
-from .flow_builder import extract_flows
+from .flow_builder import extract_flows, MIN_PACKETS, MAX_PACKETS, FLOW_TIMEOUT
 from .rtt          import extract_rtt
 from .features     import (compute_packet_sequence, compute_flow_context,
                            compute_src_host_stats)
+from ..utils.logging import get_logger
+
+_log = get_logger('data.preprocess')
 
 APP_LABELS = [
     'geforce_now', 'kt_gamebox', 'afreecatv', 'naver_now', 'youtube_live',
@@ -51,10 +54,15 @@ CAT2ID  = {c: i for i, c in enumerate(CATEGORY_LABELS)}
 def run_pipeline(raw_dir: str, out_dir: str,
                  pretrain_frac: float = 0.70,
                  downstream_frac: float = 0.15,
+                 min_packets: int = MIN_PACKETS,
+                 max_packets: int = MAX_PACKETS,
+                 flow_timeout: float = FLOW_TIMEOUT,
                  seed: int = 42) -> None:
     raw_path = Path(raw_dir)
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
+    _log.info('flow thresholds: min_packets=%d  max_packets=%d  flow_timeout=%.0fs',
+              min_packets, max_packets, flow_timeout)
 
     # ── STEP 1+2: parse CSVs and build flows ──────────────────────────────
     # Build a flat name→path index for all sub-directories (any nesting depth)
@@ -64,22 +72,32 @@ def run_pipeline(raw_dir: str, out_dir: str,
             _dir_index[p.name] = p
 
     all_flows = []
+    total_dropped = 0
+    per_app_kept: dict[str, int] = defaultdict(int)
     for app_folder, (app_lbl, cat_lbl) in FOLDER_MAP.items():
         folder = _dir_index.get(app_folder)
         if folder is None or not folder.exists():
-            print(f'[WARN] folder not found: {app_folder}')
+            _log.warning('folder not found: %s', app_folder)
             continue
 
         for csv_file in tqdm(sorted(folder.glob('*.csv')),
                              desc=f'{app_lbl}', leave=False):
             try:
                 df = parse_csv(csv_file, app_lbl, cat_lbl)
-                flows = extract_flows(df, app_lbl, cat_lbl, str(csv_file))
+                flows, n_dropped = extract_flows(
+                    df, app_lbl, cat_lbl, str(csv_file),
+                    min_packets=min_packets, max_packets=max_packets,
+                    flow_timeout=flow_timeout)
                 all_flows.extend(flows)
+                total_dropped += n_dropped
+                per_app_kept[app_lbl] += len(flows)
             except Exception as e:
-                print(f'[WARN] {csv_file}: {e}')
+                _log.warning('%s: %s', csv_file, e)
 
-    print(f'Total flows (before filter): {len(all_flows)}')
+    _log.info('Total flows kept: %d  (dropped %d with <%d packets)',
+              len(all_flows), total_dropped, min_packets)
+    for app in APP_LABELS:
+        _log.info('  %-14s %5d flows', app, per_app_kept.get(app, 0))
 
     # ── STEP 3: RTT extraction ─────────────────────────────────────────────
     for flow in tqdm(all_flows, desc='RTT extraction'):
@@ -111,7 +129,7 @@ def run_pipeline(raw_dir: str, out_dir: str,
         })
 
     df_all = pd.DataFrame(records)
-    print(f'Total flows (processed): {len(df_all)}')
+    _log.info('Total flows (processed): %d', len(df_all))
 
     # ── STEP 5: stratified splits ──────────────────────────────────────────
     from collections import Counter
@@ -125,8 +143,8 @@ def run_pipeline(raw_dir: str, out_dir: str,
     normal_indices = indices[~rare_mask]
     if len(rare_indices):
         rare_apps = [APP_LABELS[l] for l in set(labels[rare_mask])]
-        print(f'[INFO] {len(rare_indices)} flows from under-sampled classes '
-              f'forced into pretrain: {rare_apps}')
+        _log.info('%d flows from under-sampled classes forced into pretrain: %s',
+                  len(rare_indices), rare_apps)
 
     normal_labels = labels[normal_indices]
     idx_pre_normal, idx_rest = train_test_split(
@@ -175,7 +193,7 @@ def run_pipeline(raw_dir: str, out_dir: str,
         ds_df.iloc[chosen].reset_index(drop=True).to_parquet(
             out_path / f'fewshot_eta{eta}.parquet')
 
-    print(f'Saved splits to {out_path}')
-    print(f'  pretrain:          {len(idx_pre)}')
-    print(f'  downstream_train:  {len(idx_ds)}')
-    print(f'  test:              {len(idx_test)}')
+    _log.info('Saved splits to %s', out_path)
+    _log.info('  pretrain:          %d', len(idx_pre))
+    _log.info('  downstream_train:  %d', len(idx_ds))
+    _log.info('  test:              %d', len(idx_test))

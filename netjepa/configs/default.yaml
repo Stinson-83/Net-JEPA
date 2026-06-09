@@ -2,7 +2,11 @@ data:
   raw_data_dir: "/indian-slp/Users/ug/ZEPA/Kritik/net_data/5G_Traffic_Datasets"
   processed_dir: "data/processed"
   max_packets: 64
-  min_packets: 10
+  # Flows with fewer real packets than this are discarded during flow building.
+  # Lowered from 10 → 5 to recover short flows (more data + better class balance,
+  # esp. for sparse classes like video_conferencing). 5 is the safe floor: the
+  # feature extractor still needs ≥2 packets for IAT/RTT statistics.
+  min_packets: 5
   flow_timeout_seconds: 30
   pretrain_split: 0.70
   downstream_split: 0.15
@@ -34,8 +38,18 @@ training:
   dbscan_refresh_phase1: 10
   dbscan_refresh_phase2: 5
   dbscan_start_epoch: 20
-  dbscan_subsample_fraction: 0.02
-  dbscan_eps: 0.5
+  # Fraction of the pretrain set clustered (and pseudo-labelled) each refresh.
+  # Was 0.02, which labelled only ~2% of flows — with labels now keyed by true
+  # flow index, that left a batch with ~2-3 labelled flows and virtually no
+  # same-cluster pairs, so the contrastive loss never fired. Cluster the whole
+  # (~10k-flow) set instead; DBSCAN on it is a few seconds per refresh.
+  dbscan_subsample_fraction: 1.0
+  # Cosine-distance radius for DBSCAN pseudo-labelling. The downstream embeddings
+  # are tightly concentrated (pairwise cosine ~0.9), so the old 0.5 collapsed
+  # every flow into ONE cluster (no negatives → useless/harmful contrastive
+  # signal). 0.05 is a starting point — watch the per-refresh "N clusters" log
+  # and lower further if it reports 1 cluster, raise if it's mostly noise.
+  dbscan_eps: 0.05
   dbscan_min_samples: 5
 
 loss:

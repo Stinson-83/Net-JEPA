@@ -14,7 +14,6 @@ from netjepa.data.dataset          import FlowDataset
 from netjepa.evaluation.embedding  import cosine_similarity_distributions, silhouette
 from netjepa.evaluation.classification import classification_report
 from netjepa.evaluation.fewshot    import few_shot_eval
-from netjepa.evaluation.topk_pairs import topk_pairs_accuracy
 from netjepa.training.phase3       import _collect_embeddings
 from netjepa.downstream.classifier import KNNClassifier
 from netjepa.utils.io              import load_checkpoint

@@ -1,7 +1,6 @@
 """Phase 1: Self-supervised pretraining."""
 from __future__ import annotations
 import random
-import os
 from pathlib import Path
 
 import numpy as np
@@ -11,7 +10,6 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from ..model.netjepa    import NetJEPA
-from ..model.encoders   import sinusoidal_pe
 from ..loss.vicreg      import vicreg_loss
 from ..loss.contrastive import (generate_pseudo_labels,
                                  dbscan_contrastive_loss)
@@ -19,7 +17,9 @@ from ..loss.composite   import CompositeLoss
 from ..data.dataset     import FlowDataset
 from ..training.scheduler import ema_momentum
 from ..utils.io         import save_checkpoint
-from ..utils.logging    import init_wandb, log_metrics
+from ..utils.logging    import init_wandb, log_metrics, get_logger
+
+_log = get_logger('training.phase1')
 
 
 def _set_seeds(seed: int = 42) -> None:
@@ -42,7 +42,11 @@ def _adaptive_mask(true_len: int, short_thresh: int = 30,
 @torch.no_grad()
 def _extract_embeddings_subset(model: NetJEPA, dataset: FlowDataset,
                                 frac: float, device: torch.device,
-                                batch_size: int = 256) -> np.ndarray:
+                                batch_size: int = 256
+                                ) -> tuple[np.ndarray, list[int]]:
+    """Embed a random `frac` of the dataset. Returns ``(embeddings, idxs)``
+    where ``idxs[k]`` is the dataset index of ``embeddings[k]`` — the caller
+    needs this correspondence to key DBSCAN pseudo-labels by true flow index."""
     n      = max(1, int(len(dataset) * frac))
     idxs   = random.sample(range(len(dataset)), n)
     embs   = []
@@ -56,7 +60,7 @@ def _extract_embeddings_subset(model: NetJEPA, dataset: FlowDataset,
         emb = model.forward_downstream(pkt, ctx, msk)
         embs.append(emb.cpu().numpy())
     model.train()
-    return np.vstack(embs)
+    return np.vstack(embs), idxs
 
 
 def train_phase1(processed_dir: str, ckpt_dir: str = 'checkpoints/phase1',
@@ -66,9 +70,9 @@ def train_phase1(processed_dir: str, ckpt_dir: str = 'checkpoints/phase1',
                  vicreg_alpha: float = 25.0, vicreg_beta: float = 25.0,
                  vicreg_gamma: float = 1.0,
                  lambda1: float = 1.0, lambda2: float = 0.3,
-                 dbscan_eps: float = 0.5, dbscan_min_samples: int = 5,
+                 dbscan_eps: float = 0.05, dbscan_min_samples: int = 5,
                  dbscan_refresh: int = 10, dbscan_start: int = 20,
-                 dbscan_subsample: float = 0.02,
+                 dbscan_subsample: float = 1.0,
                  use_wandb: bool = False,
                  aug_kwargs: dict | None = None,
                  **model_kwargs) -> NetJEPA:
@@ -94,20 +98,28 @@ def train_phase1(processed_dir: str, ckpt_dir: str = 'checkpoints/phase1',
 
     composite = CompositeLoss(lambda1=lambda1, lambda2=lambda2)
 
-    pseudo_labels: dict[int, int] = {}
-    pseudo_valid   = False
+    pseudo_global: dict[int, int] = {}
+    pseudo_valid  = False
 
     for epoch in range(epochs):
         mom = ema_momentum(epoch)
 
-        # Refresh DBSCAN pseudo labels
+        # Refresh DBSCAN pseudo labels — keyed by *true dataset index* so each
+        # batch can look its flows up by batch['flow_idx'] (the previous
+        # batch-position keying paired labels with the wrong flows).
         if epoch >= dbscan_start and (epoch - dbscan_start) % dbscan_refresh == 0:
-            embs = _extract_embeddings_subset(model, dataset, dbscan_subsample, device)
-            pls  = generate_pseudo_labels(embs, dbscan_min_samples, dbscan_eps)
-            # Re-map to global dataset subsample indices — approximate mapping
-            # by storing labels indexed 0..len(embs)-1 directly
-            pseudo_global = {i: int(pls[i]) for i in range(len(pls))}
-            pseudo_valid  = True
+            embs, sub_idxs = _extract_embeddings_subset(model, dataset, dbscan_subsample, device)
+            pls = generate_pseudo_labels(embs, dbscan_min_samples, dbscan_eps)
+            pseudo_global = {sub_idxs[i]: int(pls[i]) for i in range(len(pls))}
+            n_clusters = len({l for l in pls if l >= 0})
+            n_noise    = int((pls < 0).sum())
+            # A single cluster has no negatives — the contrastive loss would just
+            # pull everything together (worsening collapse). Skip it until DBSCAN
+            # finds real structure; if this keeps logging 1 cluster, lower dbscan_eps.
+            pseudo_valid = n_clusters >= 2
+            _log.info('[%03d] DBSCAN: %d flows → %d clusters, %d noise (contrastive %s)',
+                      epoch, len(pls), n_clusters, n_noise,
+                      'ON' if pseudo_valid else 'OFF — need ≥2 clusters')
 
         epoch_metrics: dict[str, float] = {}
         total_loss_accum = 0.0
@@ -148,15 +160,13 @@ def train_phase1(processed_dir: str, ckpt_dir: str = 'checkpoints/phase1',
             if use_contrast:
                 with torch.no_grad():
                     flow_embs = model.forward_downstream(cln_pkt, cln_ctx, cln_msk)
-                # Use in-batch pseudo labels from cached dict (approximate)
-                batch_pl = torch.full((flow_embs.size(0),), -1,
-                                      dtype=torch.long, device=device)
-                if pseudo_valid:
-                    # Assign labels by position within subsample — approximate
-                    for bi in range(min(flow_embs.size(0), len(pseudo_global))):
-                        batch_pl[bi] = pseudo_global.get(bi, -1)
-                contrast_val = dbscan_contrastive_loss(
-                    flow_embs, batch_pl)
+                # Look each flow's cluster up by its true dataset index; flows
+                # not in the clustered subset (or DBSCAN noise) get -1 and are
+                # ignored by the contrastive loss.
+                batch_pl = torch.tensor(
+                    [pseudo_global.get(int(fi), -1) for fi in batch['flow_idx']],
+                    dtype=torch.long, device=device)
+                contrast_val = dbscan_contrastive_loss(flow_embs, batch_pl)
 
             total = composite(vic_loss, contrast_val, use_contrast)
             opt.zero_grad()
@@ -174,10 +184,10 @@ def train_phase1(processed_dir: str, ckpt_dir: str = 'checkpoints/phase1',
         epoch_metrics['ema_momentum'] = mom
         epoch_metrics['lr'] = sched.get_last_lr()[0]
 
-        print(f'[Phase1 {epoch:03d}] loss={avg_loss:.4f} '
-              f'inv={epoch_metrics.get("invariance",0):.4f} '
-              f'var={epoch_metrics.get("variance",0):.4f} '
-              f'mom={mom:.4f}')
+        _log.info('[%03d] loss=%.4f inv=%.4f var=%.4f cov=%.4f mom=%.4f lr=%.2e',
+                  epoch, avg_loss,
+                  epoch_metrics.get('invariance', 0), epoch_metrics.get('variance', 0),
+                  epoch_metrics.get('covariance', 0), mom, epoch_metrics['lr'])
 
         if use_wandb:
             log_metrics(epoch_metrics, step=epoch)
