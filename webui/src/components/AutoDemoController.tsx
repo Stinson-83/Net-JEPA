@@ -19,7 +19,6 @@ export default function AutoDemoController() {
   // loading — which useSyncExternalStore reads as an endless store change
   // ("Maximum update depth exceeded"). See EMPTY_POINTS in the store.
   const points = useStore((s) => s.bundle?.points ?? EMPTY_POINTS);
-  const pipelinePlaying = useStore((s) => s.pipelinePlaying);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelledRef = useRef(false);

@@ -15,8 +15,6 @@ export default function Metrics() {
   const tab = useStore((s) => s.metricsTab);
   const setTab = useStore((s) => s.setMetricsTab);
 
-  const hasActiveContent = false; // Training tab is global, not flow-specific, so it's always "inactive" in terms of selection highlights, but we give it the same header treatment.
-
   return (
     <div 
       className="relative flex h-full flex-col rounded-lg border border-[var(--nj-border)] bg-[var(--nj-surface)] p-3 pt-6 transition-all duration-300"

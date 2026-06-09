@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore, EMPTY_POINTS, EMPTY_CLASSES } from '../../state/store';
 import { Camera } from './camera';
 import { classColor } from '../../data/classColors';

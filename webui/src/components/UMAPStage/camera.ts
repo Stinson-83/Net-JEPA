@@ -99,10 +99,11 @@ export class Camera {
   height = 1;
   baseExtent = 12;
 
-  // Cached matrices (rebuilt each frame)
-  viewMatrix = new Float32Array(16);
-  projMatrix = new Float32Array(16);
-  vpMatrix = new Float32Array(16);
+  // Cached matrices (rebuilt each frame). Explicit Float32Array type so the
+  // (generic, TS ≥5.7) matrix-helper return type is assignable here.
+  viewMatrix: Float32Array = new Float32Array(16);
+  projMatrix: Float32Array = new Float32Array(16);
+  vpMatrix: Float32Array = new Float32Array(16);
 
   private flight: FlightState | null = null;
 

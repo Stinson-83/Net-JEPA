@@ -21,7 +21,7 @@ Run:
 
 Environment variables:
     DATASET_ID      — export sub-dir under webui/public/data (default: phase3b_supcon)
-    NETJEPA_CKPT    — trained NetJEPA checkpoint (default: checkpoints/phase3b/final.pt)
+    NETJEPA_CKPT    — trained NetJEPA checkpoint (default: checkpoints/phase3/final.pt)
     KNN_PATH        — knn.joblib index (optional, auto-detected from ckpt dir)
     PCAP_PATH       — optional .pcap to auto-replay on startup (legacy live mode)
     REPLAY_SPEED    — float multiplier for replay speed (default: 1.0)
@@ -55,7 +55,7 @@ from model.netjepa_classifier import NetJEPAClassifier
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 DATASET_ID   = os.environ.get('DATASET_ID',   'phase3b_supcon')
-NETJEPA_CKPT = os.environ.get('NETJEPA_CKPT', 'checkpoints/phase3b/final.pt')
+NETJEPA_CKPT = os.environ.get('NETJEPA_CKPT', 'checkpoints/phase3/final.pt')
 KNN_PATH     = os.environ.get('KNN_PATH',     '')
 PCAP_PATH    = os.environ.get('PCAP_PATH',    '')
 REPLAY_SPEED = float(os.environ.get('REPLAY_SPEED', '1.0'))

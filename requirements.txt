@@ -13,6 +13,9 @@ scipy>=1.11.0
 scapy>=2.5.0
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
+# uvicorn's ASGI WebSocket handler needs websockets >=10 (older system builds
+# like 9.1 break the /ws upgrade with a `logger` TypeError).
+websockets>=10
 python-multipart>=0.0.6
 joblib>=1.3.0
 umap-learn>=0.5.4
