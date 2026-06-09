@@ -2,9 +2,27 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, WeightedRandomSampler
 
 from .augment import degrade_flow
+
+
+def make_balanced_sampler(labels: np.ndarray) -> WeightedRandomSampler:
+    """Inverse-frequency sampler so each drawn batch is ~class-balanced.
+
+    Critical under heavy imbalance: supervised-contrastive (SupCon) skips any
+    anchor with no same-class sample in its batch, so a minority class that
+    appears 0-1 times per batch never receives gradient. Balanced sampling
+    guarantees several samples per class per batch (with replacement), giving
+    minority classes positive pairs to learn from.
+    """
+    labels = np.asarray(labels)
+    class_counts = np.bincount(labels)
+    inv_freq = 1.0 / np.maximum(class_counts, 1)
+    weights = inv_freq[labels]
+    return WeightedRandomSampler(
+        weights=torch.as_tensor(weights, dtype=torch.double),
+        num_samples=len(labels), replacement=True)
 
 
 class FlowDataset(Dataset):

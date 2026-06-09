@@ -71,10 +71,17 @@ def train_phase3(processed_dir: str, ckpt_dir: str = 'checkpoints/phase3',
     ds_train = FlowDataset(str(Path(processed_dir) / 'downstream_train.parquet'))
     ds_test  = FlowDataset(str(Path(processed_dir) / 'test.parquet'))
 
+    # Plain loaders for collecting the (un-resampled) embeddings the kNN indexes.
     train_loader = DataLoader(ds_train, batch_size=batch_size,
-                              shuffle=True,  num_workers=2, pin_memory=True)
+                              shuffle=False, num_workers=2, pin_memory=True)
     test_loader  = DataLoader(ds_test,  batch_size=batch_size,
                               shuffle=False, num_workers=2, pin_memory=True)
+    # Shuffle loader for training the CE heads. Imbalance is handled by the
+    # class-weighted loss below (NOT balanced sampling — combining both
+    # over-corrects: oversampling the 5-sample classes with replacement and then
+    # re-weighting them ~40x collapses the heads onto minority predictions).
+    head_loader  = DataLoader(ds_train, batch_size=batch_size, shuffle=True,
+                              num_workers=2, pin_memory=True)
 
     # Collect embeddings for kNN
     train_embs, train_labels = _collect_embeddings(model, train_loader, device)
@@ -95,7 +102,13 @@ def train_phase3(processed_dir: str, ckpt_dir: str = 'checkpoints/phase3',
     joblib.dump(knn.clf, Path(ckpt_dir) / 'knn.joblib')
     _log.info('kNN index saved → %s', Path(ckpt_dir) / 'knn.joblib')
 
-    criterion = nn.CrossEntropyLoss()
+    # Inverse-frequency class weights (sklearn 'balanced' style) so the CE heads
+    # don't collapse onto the majority classes under heavy imbalance.
+    counts = np.bincount(train_labels, minlength=num_classes)
+    class_weight = torch.tensor(
+        len(train_labels) / (num_classes * np.maximum(counts, 1)),
+        dtype=torch.float32, device=device)
+    criterion = nn.CrossEntropyLoss(weight=class_weight)
 
     def _train_head(head: nn.Module, tag: str) -> float:
         head = head.to(device)
@@ -104,7 +117,7 @@ def train_phase3(processed_dir: str, ckpt_dir: str = 'checkpoints/phase3',
         model.eval()
         head.train()
         for ep in range(epochs):
-            for batch in train_loader:
+            for batch in head_loader:
                 pkt = batch['packet_seq'].to(device)
                 ctx = batch['flow_ctx'].to(device)
                 msk = batch['padding_mask'].to(device)

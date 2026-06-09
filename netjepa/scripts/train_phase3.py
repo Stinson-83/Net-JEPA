@@ -17,7 +17,8 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument('--config',        default='netjepa/configs/default.yaml')
     p.add_argument('--processed_dir', default=None)
-    p.add_argument('--phase2_ckpt',   default='checkpoints/phase2/final.pt')
+    # Default to the SupCon-refined encoder (Phase 2b) rather than Phase 2.
+    p.add_argument('--phase2_ckpt',   default='checkpoints/phase2b/final.pt')
     p.add_argument('--ckpt_dir',      default='checkpoints/phase3')
     p.add_argument('--device',        default='cuda')
     p.add_argument('--wandb',         action='store_true')

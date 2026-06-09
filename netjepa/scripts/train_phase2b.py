@@ -12,12 +12,16 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument('--config',       default='netjepa/configs/default.yaml')
     p.add_argument('--processed_dir', default=None)
-    p.add_argument('--phase2_ckpt',  default='checkpoints/phase2/final.pt')
+    # Lean on SupCon: initialise from the Phase 1 encoder directly (the
+    # unsupervised Phase 2 contrastive refinement didn't help separation).
+    p.add_argument('--init_ckpt',    default='checkpoints/phase1/final.pt')
     p.add_argument('--ckpt_dir',     default='checkpoints/phase2b')
-    p.add_argument('--epochs',       type=int,   default=30)
-    p.add_argument('--lr_encoder',   type=float, default=1e-5)
-    p.add_argument('--lr_head',      type=float, default=1e-3)
-    p.add_argument('--temperature',  type=float, default=0.07)
+    p.add_argument('--epochs',       type=int,   default=None)
+    p.add_argument('--lr_encoder',   type=float, default=None)
+    p.add_argument('--lr_head',      type=float, default=None)
+    p.add_argument('--temperature',  type=float, default=None)
+    p.add_argument('--no_balanced',  action='store_true',
+                   help='disable class-balanced sampling (on by default)')
     p.add_argument('--device',       default='cuda')
     p.add_argument('--wandb',        action='store_true')
     args = p.parse_args()
@@ -28,16 +32,18 @@ def main():
     data_cfg  = cfg['data']
     model_cfg = cfg['model']
     ds_cfg    = cfg['downstream']
+    tr_cfg    = cfg.get('training', {})
 
     train_phase2b(
         processed_dir=args.processed_dir or data_cfg['processed_dir'],
         ckpt_dir=args.ckpt_dir,
-        phase2_ckpt=args.phase2_ckpt,
-        epochs=args.epochs,
-        lr_encoder=args.lr_encoder,
-        lr_head=args.lr_head,
-        temperature=args.temperature,
+        init_ckpt=args.init_ckpt,
+        epochs=args.epochs if args.epochs is not None else tr_cfg.get('phase2b_epochs', 30),
+        lr_encoder=args.lr_encoder if args.lr_encoder is not None else tr_cfg.get('lr_phase2b_encoder', 1e-4),
+        lr_head=args.lr_head if args.lr_head is not None else tr_cfg.get('lr_phase2b_head', 1e-3),
+        temperature=args.temperature if args.temperature is not None else tr_cfg.get('supcon_temperature', 0.07),
         embedding_dim=ds_cfg['embedding_dim'],
+        balanced=not args.no_balanced,
         device_str=args.device,
         use_wandb=args.wandb,
         d_model=model_cfg['d_model'],

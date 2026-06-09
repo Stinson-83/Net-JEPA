@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from ..model.netjepa    import NetJEPA
 from ..loss.supcon      import supcon_loss
-from ..data.dataset     import FlowDataset
+from ..data.dataset     import FlowDataset, make_balanced_sampler
 from ..training.phase1  import _set_seeds
 from ..utils.io         import save_checkpoint, load_checkpoint
 from ..utils.logging    import init_wandb, log_metrics, get_logger
@@ -35,14 +35,15 @@ class _ProjHead(nn.Module):
 
 def train_phase2b(processed_dir: str,
                   ckpt_dir: str = 'checkpoints/phase2b',
-                  phase2_ckpt: str | None = None,
+                  init_ckpt: str | None = None,
                   epochs: int = 30,
                   batch_size: int = 128,
-                  lr_encoder: float = 1e-5,
+                  lr_encoder: float = 1e-4,
                   lr_head: float = 1e-3,
                   weight_decay: float = 1e-4,
                   temperature: float = 0.07,
                   embedding_dim: int = 143,
+                  balanced: bool = True,
                   device_str: str = 'cuda',
                   use_wandb: bool = False,
                   **model_kwargs) -> None:
@@ -54,8 +55,8 @@ def train_phase2b(processed_dir: str,
         init_wandb('netjepa-phase2b')
 
     model = NetJEPA(**model_kwargs).to(device)
-    if phase2_ckpt:
-        load_checkpoint(model, None, phase2_ckpt, device)
+    if init_ckpt:
+        load_checkpoint(model, None, init_ckpt, device)
 
     proj = _ProjHead(in_dim=embedding_dim).to(device)
 
@@ -71,8 +72,15 @@ def train_phase2b(processed_dir: str,
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
 
     ds = FlowDataset(str(Path(processed_dir) / 'downstream_train.parquet'))
-    loader = DataLoader(ds, batch_size=batch_size, shuffle=True,
-                        num_workers=2, pin_memory=True, drop_last=True)
+    if balanced:
+        sampler = make_balanced_sampler(ds.df['app_label'].to_numpy())
+        loader = DataLoader(ds, batch_size=batch_size, sampler=sampler,
+                            num_workers=2, pin_memory=True, drop_last=True)
+        _log.info('class-balanced sampling ON over %d classes (encoder lr=%.0e)',
+                  ds.df['app_label'].nunique(), lr_encoder)
+    else:
+        loader = DataLoader(ds, batch_size=batch_size, shuffle=True,
+                            num_workers=2, pin_memory=True, drop_last=True)
 
     for epoch in range(epochs):
         model.train()
