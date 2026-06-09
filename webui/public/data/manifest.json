@@ -2,7 +2,7 @@
   "datasets": [
     {
       "id": "phase3b_supcon",
-      "name": "Phase 3b \u2014 SupCon (balanced)",
+      "name": "Phase 3b \u2014 SupCon + isotropised (KPI-compliant)",
       "trained_on": "2026-06-09",
       "n_flows": 2794
     }
@@ -16,6 +16,6 @@
     "stored_streaming",
     "video_conferencing"
   ],
-  "embedding_dim": 143,
+  "embedding_dim": 128,
   "model_version": "netjepa-ckpt-e50"
 }
