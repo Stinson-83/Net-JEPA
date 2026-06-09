@@ -2,9 +2,9 @@
   "datasets": [
     {
       "id": "phase3b_supcon",
-      "name": "Phase 3b \u2014 SupCon fine-tuned",
-      "trained_on": "2026-06-07",
-      "n_flows": 2098
+      "name": "Phase 3b \u2014 SupCon (balanced)",
+      "trained_on": "2026-06-09",
+      "n_flows": 2794
     }
   ],
   "active_dataset": "phase3b_supcon",
