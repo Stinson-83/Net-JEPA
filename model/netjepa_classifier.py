@@ -7,7 +7,6 @@ NetJEPA feature format and runs forward_downstream classification.
 from __future__ import annotations
 
 import math
-import time
 from pathlib import Path
 from typing import List
 
@@ -175,13 +174,11 @@ class NetJEPAClassifier(Classifier):
                               embedding=None, category='unknown')
 
         pkt_t, ctx_t, mask_t = packets_to_tensors(packets)
-        t0 = time.perf_counter()
         with torch.no_grad():
             emb = self._model.forward_downstream(
                 pkt_t.to(self._device),
                 ctx_t.to(self._device),
                 mask_t.to(self._device))
-        latency_ms = (time.perf_counter() - t0) * 1000
 
         emb_np = emb.cpu().numpy()
 
@@ -194,9 +191,11 @@ class NetJEPAClassifier(Classifier):
             return Prediction(label='unknown', confidence=0.0,
                               embedding=emb_np[0], category='unknown')
 
-        label    = APP_LABELS[label_id] if label_id < len(APP_LABELS) else 'unknown'
-        category = APP_TO_CATEGORY.get(label, 'unknown')
-        return Prediction(label=label, confidence=confidence,
+        # The Phase 3 kNN now predicts the 6 coarse CATEGORIES directly (the
+        # level the cosine/accuracy KPIs are defined at), not the 15 apps.
+        category = (CATEGORY_LABELS[label_id]
+                    if 0 <= label_id < len(CATEGORY_LABELS) else 'unknown')
+        return Prediction(label=category, confidence=confidence,
                           embedding=emb_np[0], category=category)
 
     def save(self, path: str) -> None:
@@ -211,8 +210,7 @@ class NetJEPAClassifier(Classifier):
 
         obj = cls()
         obj._model = _NetJEPA()
-        payload    = _load_checkpoint(obj._model, None, checkpoint_path,
-                                      obj._device)
+        _load_checkpoint(obj._model, None, checkpoint_path, obj._device)
         obj._model.eval()
 
         if knn_path and Path(knn_path).exists():

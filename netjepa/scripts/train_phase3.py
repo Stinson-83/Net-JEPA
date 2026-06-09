@@ -40,7 +40,7 @@ def main():
         batch_size=64,
         lr=tr_cfg['lr_phase3'],
         weight_decay=tr_cfg['weight_decay'],
-        num_classes=ds_cfg['num_classes'],
+        num_classes=ds_cfg['num_categories'],
         embedding_dim=ds_cfg['embedding_dim'],
         device_str=args.device,
         use_wandb=args.wandb,

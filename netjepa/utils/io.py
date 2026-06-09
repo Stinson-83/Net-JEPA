@@ -26,10 +26,20 @@ def save_checkpoint(model: nn.Module,
 def load_checkpoint(model: nn.Module,
                     optimizer: optim.Optimizer | None,
                     path: str | Path,
-                    device: torch.device | None = None) -> dict:
+                    device: torch.device | None = None,
+                    strict: bool = True) -> dict:
     path    = Path(path)
     payload = torch.load(path, map_location=device or 'cpu')
-    model.load_state_dict(payload['model_state'])
+    result = model.load_state_dict(payload['model_state'], strict=strict)
+    if not strict:
+        missing = list(getattr(result, 'missing_keys', []))
+        unexpected = list(getattr(result, 'unexpected_keys', []))
+        if missing:
+            print(f'  [load] {len(missing)} new param(s) left at init '
+                  f'(e.g. {missing[:3]})')
+        if unexpected:
+            print(f'  [load] {len(unexpected)} checkpoint param(s) ignored '
+                  f'(e.g. {unexpected[:3]})')
     if optimizer is not None and 'optimizer_state' in payload:
         optimizer.load_state_dict(payload['optimizer_state'])
     print(f'Checkpoint loaded ← {path}  (epoch {payload.get("epoch", "?")})')

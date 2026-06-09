@@ -94,7 +94,7 @@ def main():
         train_embs, train_labels, test_embs, test_labels,
         eta_values=ev_cfg['fewshot_eta_values'],
         repeats=ev_cfg['fewshot_repeats'],
-        num_classes=ds_cfg['num_classes'],
+        num_classes=ds_cfg['num_categories'],
         embedding_dim=ds_cfg['embedding_dim'],
     )
 

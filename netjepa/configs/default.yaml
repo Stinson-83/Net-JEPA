@@ -92,7 +92,14 @@ evaluation:
   latency_trials: 1000
 
 downstream:
-  embedding_dim: 143
+  # The model now emits an L2-normalised, category-supervised embedding from
+  # embed_head (was the raw 143-d concat). 128 = embed_head output dim.
+  embedding_dim: 128
+  # Common-mode removal strength baked in at the end of Phase 2b. SupCon
+  # separates class directions but leaves a shared cone (inter-cosine ~0.7);
+  # subtracting α·mean unfolds it. α≈0.65 is the window where BOTH KPIs hold
+  # (intra>0.7, inter<0.3); 0 disables.
+  center_alpha: 0.65
   knn_k: 5
   num_classes: 15
   num_categories: 6

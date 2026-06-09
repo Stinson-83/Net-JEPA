@@ -44,7 +44,7 @@ def _collect_embeddings(model: NetJEPA, loader: DataLoader,
         msk = batch['padding_mask'].to(device)
         emb = model.forward_downstream(pkt, ctx, msk)
         embs.append(emb.cpu().numpy())
-        labels.append(batch['app_label'].numpy())
+        labels.append(batch['category_label'].numpy())
     return np.vstack(embs), np.concatenate(labels)
 
 
@@ -121,7 +121,7 @@ def train_phase3(processed_dir: str, ckpt_dir: str = 'checkpoints/phase3',
                 pkt = batch['packet_seq'].to(device)
                 ctx = batch['flow_ctx'].to(device)
                 msk = batch['padding_mask'].to(device)
-                lbl = batch['app_label'].to(device)
+                lbl = batch['category_label'].to(device)
                 with torch.no_grad():
                     emb = model.forward_downstream(pkt, ctx, msk)
                 logits = head(emb)
@@ -140,7 +140,7 @@ def train_phase3(processed_dir: str, ckpt_dir: str = 'checkpoints/phase3',
                 pkt = batch['packet_seq'].to(device)
                 ctx = batch['flow_ctx'].to(device)
                 msk = batch['padding_mask'].to(device)
-                lbl = batch['app_label'].to(device)
+                lbl = batch['category_label'].to(device)
                 emb    = model.forward_downstream(pkt, ctx, msk)
                 preds  = head(emb).argmax(dim=1)
                 correct += (preds == lbl).sum().item()

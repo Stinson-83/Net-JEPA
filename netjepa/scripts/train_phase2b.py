@@ -20,6 +20,8 @@ def main():
     p.add_argument('--lr_encoder',   type=float, default=None)
     p.add_argument('--lr_head',      type=float, default=None)
     p.add_argument('--temperature',  type=float, default=None)
+    p.add_argument('--center_alpha', type=float, default=None,
+                   help='common-mode removal strength (0 disables; ~0.65 hits the cosine KPI)')
     p.add_argument('--no_balanced',  action='store_true',
                    help='disable class-balanced sampling (on by default)')
     p.add_argument('--device',       default='cuda')
@@ -42,6 +44,7 @@ def main():
         lr_encoder=args.lr_encoder if args.lr_encoder is not None else tr_cfg.get('lr_phase2b_encoder', 1e-4),
         lr_head=args.lr_head if args.lr_head is not None else tr_cfg.get('lr_phase2b_head', 1e-3),
         temperature=args.temperature if args.temperature is not None else tr_cfg.get('supcon_temperature', 0.07),
+        center_alpha=args.center_alpha if args.center_alpha is not None else ds_cfg.get('center_alpha', 0.65),
         embedding_dim=ds_cfg['embedding_dim'],
         balanced=not args.no_balanced,
         device_str=args.device,

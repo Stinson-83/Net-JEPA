@@ -17,20 +17,11 @@ from ..utils.logging    import init_wandb, log_metrics, get_logger
 
 _log = get_logger('training.phase2b')
 
-
-class _ProjHead(nn.Module):
-    """Small projection head used only during Phase 2b; discarded afterwards."""
-    def __init__(self, in_dim: int = 143, hidden: int = 256, out_dim: int = 128):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(in_dim, hidden),
-            nn.BatchNorm1d(hidden),
-            nn.ReLU(),
-            nn.Linear(hidden, out_dim),
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x)
+# The cosine-similarity KPI is defined at the CATEGORY level ("Youtube and
+# Netflix" — different apps, same category `stored_streaming` — are intra-class).
+# So SupCon is supervised on category_label; app-level would push Youtube and
+# Netflix apart, fighting the > 0.7 intra-class target.
+LABEL_KEY = 'category_label'
 
 
 def train_phase2b(processed_dir: str,
@@ -42,7 +33,8 @@ def train_phase2b(processed_dir: str,
                   lr_head: float = 1e-3,
                   weight_decay: float = 1e-4,
                   temperature: float = 0.07,
-                  embedding_dim: int = 143,
+                  embedding_dim: int = 128,
+                  center_alpha: float = 0.65,
                   balanced: bool = True,
                   device_str: str = 'cuda',
                   use_wandb: bool = False,
@@ -54,53 +46,53 @@ def train_phase2b(processed_dir: str,
     if use_wandb:
         init_wandb('netjepa-phase2b')
 
-    model = NetJEPA(**model_kwargs).to(device)
+    model = NetJEPA(embed_dim=embedding_dim, **model_kwargs).to(device)
     if init_ckpt:
-        load_checkpoint(model, None, init_ckpt, device)
+        # strict=False: the Phase 1 checkpoint predates embed_head, which is
+        # trained fresh here.
+        load_checkpoint(model, None, init_ckpt, device, strict=False)
 
-    proj = _ProjHead(in_dim=embedding_dim).to(device)
-
-    # Encoder gets a very small LR to nudge representations without destroying them
+    # SupCon is applied directly on the kept, L2-normalised embedding (model's
+    # embed_head) — that's the space the cosine KPI measures, so we separate
+    # classes there rather than in a throwaway projection head. embed_head gets
+    # the head LR; the pretrained encoder a smaller LR so it's nudged, not wrecked.
     optimizer = optim.AdamW([
         {'params': model.temporal_encoder.parameters(), 'lr': lr_encoder},
         {'params': model.context_encoder.parameters(),  'lr': lr_encoder},
         {'params': model.fusion_a.parameters(),         'lr': lr_encoder},
         {'params': model.pooling_b.parameters(),        'lr': lr_encoder},
-        {'params': proj.parameters(),                   'lr': lr_head},
+        {'params': model.embed_head.parameters(),       'lr': lr_head},
     ], weight_decay=weight_decay)
 
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
 
     ds = FlowDataset(str(Path(processed_dir) / 'downstream_train.parquet'))
     if balanced:
-        sampler = make_balanced_sampler(ds.df['app_label'].to_numpy())
+        sampler = make_balanced_sampler(ds.df[LABEL_KEY].to_numpy())
         loader = DataLoader(ds, batch_size=batch_size, sampler=sampler,
                             num_workers=2, pin_memory=True, drop_last=True)
-        _log.info('class-balanced sampling ON over %d classes (encoder lr=%.0e)',
-                  ds.df['app_label'].nunique(), lr_encoder)
+        _log.info('class-balanced SupCon over %d categories (encoder lr=%.0e, head lr=%.0e)',
+                  ds.df[LABEL_KEY].nunique(), lr_encoder, lr_head)
     else:
         loader = DataLoader(ds, batch_size=batch_size, shuffle=True,
                             num_workers=2, pin_memory=True, drop_last=True)
 
     for epoch in range(epochs):
         model.train()
-        proj.train()
         total_loss = 0.0
 
         for batch in tqdm(loader, desc=f'Phase2b epoch {epoch:03d}', leave=False):
             pkt  = batch['packet_seq'].to(device)
             ctx  = batch['flow_ctx'].to(device)
             msk  = batch['padding_mask'].to(device)
-            lbl  = batch['app_label'].to(device)
+            lbl  = batch[LABEL_KEY].to(device)
 
-            emb = model.forward_downstream(pkt, ctx, msk)   # (B, 143)
-            z   = proj(emb)                                   # (B, 128)
+            z = model.forward_downstream(pkt, ctx, msk)   # (B, embed_dim), normalised
             loss = supcon_loss(z, lbl, temperature=temperature)
 
             optimizer.zero_grad()
             loss.backward()
-            nn.utils.clip_grad_norm_(
-                list(model.parameters()) + list(proj.parameters()), 1.0)
+            nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             total_loss += loss.item()
 
@@ -110,6 +102,19 @@ def train_phase2b(processed_dir: str,
         if use_wandb:
             log_metrics({'phase2b/loss': avg}, step=epoch)
 
-    # Save encoder only (projection head is discarded)
+    # Bake common-mode removal into the model: compute the mean embedding over
+    # the training set (centering still off → uncentered) and enable α-centering
+    # so the cosine KPI (intra>0.7 / inter<0.3) holds at inference.
+    model.eval()
+    means = []
+    with torch.no_grad():
+        for batch in DataLoader(ds, batch_size=256, shuffle=False, num_workers=2):
+            e = model.forward_downstream(batch['packet_seq'].to(device),
+                                         batch['flow_ctx'].to(device),
+                                         batch['padding_mask'].to(device))
+            means.append(e.cpu())
+    model.set_centering(torch.cat(means).mean(dim=0), center_alpha)
+    _log.info('centering enabled (alpha=%.2f) over %d train embeddings', center_alpha, len(ds))
+
     save_checkpoint(model, optimizer, epoch, {}, Path(ckpt_dir) / 'final.pt')
     _log.info('Checkpoint saved → %s', Path(ckpt_dir) / 'final.pt')
