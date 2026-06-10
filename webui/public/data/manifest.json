@@ -2,7 +2,7 @@
   "datasets": [
     {
       "id": "phase3b_supcon",
-      "name": "Phase 3b \u2014 SupCon + VLC Teams",
+      "name": "Phase 3b \u2014 SupCon + VLC (Teams supervised, rest pretrain)",
       "trained_on": "2026-06-10",
       "n_flows": 2860
     }

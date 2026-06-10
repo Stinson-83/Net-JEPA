@@ -1,13 +1,13 @@
 {
-  "accuracy": 0.929020979020979,
-  "macro_f1": 0.8955235759247634,
+  "accuracy": 0.9255244755244755,
+  "macro_f1": 0.8869698683008971,
   "per_class_f1": {
-    "game_streaming": 0.7289719626168224,
-    "live_streaming": 0.9482288828337875,
-    "metaverse": 0.9454679439941046,
-    "online_game": 0.9063231850117096,
+    "game_streaming": 0.7169811320754716,
+    "live_streaming": 0.9445196211096076,
+    "metaverse": 0.9432153392330384,
+    "online_game": 0.9028103044496487,
     "stored_streaming": 0.9490445859872612,
-    "video_conferencing": 0.8951048951048951
+    "video_conferencing": 0.8652482269503546
   },
   "confusion_matrix": {
     "labels": [
@@ -20,58 +20,58 @@
     ],
     "matrix": [
       [
-        39,
-        0,
-        7,
-        13,
+        38,
+        1,
+        8,
+        12,
         0,
         0
       ],
       [
-        0,
-        348,
+        1,
+        349,
         6,
-        9,
+        8,
         2,
-        3
+        2
       ],
       [
-        5,
+        4,
         7,
-        1283,
-        37,
+        1279,
+        42,
         0,
         0
       ],
       [
         4,
         4,
-        80,
-        774,
+        82,
+        771,
         4,
-        0
-      ],
-      [
-        0,
-        4,
-        4,
-        2,
-        149,
-        0
+        1
       ],
       [
         0,
         3,
+        4,
         2,
+        149,
+        1
+      ],
+      [
+        0,
+        7,
+        1,
         7,
         0,
-        64
+        61
       ]
     ]
   },
-  "intra_class_cos": 0.823,
-  "inter_class_cos": 0.127,
-  "latency_ms_cpu": 11.4,
-  "latency_ms_gpu": 1.8,
-  "silhouette": 0.528
+  "intra_class_cos": 0.826,
+  "inter_class_cos": 0.131,
+  "latency_ms_cpu": 3.5,
+  "latency_ms_gpu": 1.5,
+  "silhouette": 0.525
 }
