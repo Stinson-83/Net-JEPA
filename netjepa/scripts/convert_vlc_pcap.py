@@ -4,11 +4,10 @@ Net-JEPA preprocessor expects, foldered by app so FOLDER_MAP picks them up.
 The training pipeline (netjepa/data/parser.py) ingests Wireshark CSV exports
 with columns `No.,Time,Source,Destination,Protocol,Length,Info`, and pulls
 ports + TCP flags + TLS Client/Server Hello *out of the Info column* via regex.
-VLC ships only raw pcapng, so this script uses tshark to emit those exact
-columns — and crucially *synthesises* the Info field as `sport > dport [FLAGS]
-Client Hello` so parser._parse_info_vectorized matches it deterministically
-(rather than relying on the running Wireshark version's Info formatting, which
-may use the "→" arrow and break the `(\d+)\s*>\s*(\d+)` port regex).
+VLC ships only raw pcapng, so this script reads each capture with scapy (already
+a dependency — no tshark/Wireshark needed) and *synthesises* the Info field as
+`sport > dport [FLAGS] Client Hello`, exactly the form parser._parse_info_vectorized
+matches.
 
 Only VLC apps that map onto an existing Net-JEPA label are converted (Netflix,
 Prime, YouTube, Teams, Roblox); Spotify / web-browsing have no equivalent in
@@ -24,20 +23,21 @@ Usage:
     python netjepa/scripts/preprocess_kaggle.py
 
 Notes:
-- Requires `tshark` on PATH (Wireshark CLI).
-- Filenames are matched to apps by substring (VLC_FILE_MAP) — adjust the map to
-  the actual VLC filenames if they differ.
+- Filenames are matched to apps by substring (VLC_FILE_MAP) — adjust to the
+  actual VLC filenames if they differ.
 - To MEASURE cross-dataset generalization (KPI #3), convert VLC into a *separate*
-  out_dir and keep it out of the training split — train on Kaggle, test on VLC.
+  out_dir and keep it out of training — train on Kaggle, test on VLC.
 """
 from __future__ import annotations
 
 import argparse
 import csv
-import shutil
-import subprocess
 import sys
 from pathlib import Path
+
+from scapy.layers.inet import IP, TCP, UDP
+from scapy.layers.inet6 import IPv6
+from scapy.utils import PcapReader
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from netjepa.utils.logging import get_logger
@@ -45,8 +45,8 @@ from netjepa.utils.logging import get_logger
 _log = get_logger('scripts.convert_vlc')
 
 # Substring in the pcapng filename → output folder name (must match a
-# FOLDER_MAP key added in netjepa/data/preprocess.py). Files matching none of
-# these are skipped (Spotify / browsing have no Net-JEPA category).
+# FOLDER_MAP key in netjepa/data/preprocess.py). Files matching none of these
+# are skipped (Spotify / browsing have no Net-JEPA category).
 VLC_FILE_MAP: dict[str, str] = {
     'netflix': 'VLC_Netflix',
     'prime':   'VLC_Prime',     # Amazon Prime Video → amazon_prime
@@ -55,79 +55,77 @@ VLC_FILE_MAP: dict[str, str] = {
     'roblox':  'VLC_Roblox',    # filed under metaverse, per Net-JEPA's taxonomy
 }
 
-# tshark fields, in order — keep in sync with _build_row() indices below.
-TSHARK_FIELDS = [
-    'frame.number', 'frame.time_epoch',
-    'ip.src', 'ipv6.src', 'ip.dst', 'ipv6.dst',
-    '_ws.col.Protocol', 'frame.len',
-    'tcp.srcport', 'tcp.dstport', 'udp.srcport', 'udp.dstport',
-    'tcp.flags.syn', 'tcp.flags.ack', 'tcp.flags.fin', 'tcp.flags.reset',
-    'tls.handshake.type',
-]
-_SEP = '|'
 CSV_HEADER = ['No.', 'Time', 'Source', 'Destination', 'Protocol', 'Length', 'Info']
 
-_TRUE = {'1', 'true', 'True'}
+
+def _ip_layer(pkt):
+    if IP in pkt:
+        return pkt[IP].src, pkt[IP].dst
+    if IPv6 in pkt:
+        return pkt[IPv6].src, pkt[IPv6].dst
+    return None, None
 
 
-def _build_row(f: list[str]) -> list[str] | None:
-    """One tshark field-line → a CSV row matching parser.py's schema, or None
-    to drop (non-IP / non-transport)."""
-    src = f[2] or f[3]          # ip.src or ipv6.src
-    dst = f[4] or f[5]
-    if not src or not dst:
+def _proto_name(pkt, sport: int, dport: int, is_tcp: bool) -> str:
+    """Coarse protocol string matching parser.PROTOCOL_MAP buckets
+    (TCP/TLS→0, UDP→1, QUIC→2). Only the bucket matters downstream."""
+    if is_tcp:
+        return 'TCP'           # TLS also maps to id 0, so TCP is sufficient
+    return 'QUIC' if 443 in (sport, dport) else 'UDP'
+
+
+def _tls_marker(payload: bytes) -> str:
+    # TLS record: type(1)=0x16 handshake, then version(2)+len(2); byte[5] is the
+    # handshake message type — 1=ClientHello, 2=ServerHello.
+    if len(payload) >= 6 and payload[0] == 0x16:
+        if payload[5] == 0x01:
+            return ' Client Hello'
+        if payload[5] == 0x02:
+            return ' Server Hello'
+    return ''
+
+
+def _row(pkt, n: int) -> list | None:
+    src, dst = _ip_layer(pkt)
+    if src is None:
         return None
-    sport = f[8] or f[10]       # tcp.srcport or udp.srcport
-    dport = f[9] or f[11]
+    if TCP in pkt:
+        tp, is_tcp = pkt[TCP], True
+    elif UDP in pkt:
+        tp, is_tcp = pkt[UDP], False
+    else:
+        return None
+    sport, dport = int(tp.sport), int(tp.dport)
 
     flags = []
-    if f[12] in _TRUE: flags.append('SYN')
-    if f[13] in _TRUE: flags.append('ACK')
-    if f[14] in _TRUE: flags.append('FIN')
-    if f[15] in _TRUE: flags.append('RST')
+    info = f'{sport} > {dport}'
+    if is_tcp:
+        f = tp.flags
+        if 'S' in f and 'A' not in f: flags.append('SYN')
+        elif 'S' in f and 'A' in f:   flags += ['SYN', 'ACK']
+        elif 'A' in f:                flags.append('ACK')
+        if 'F' in f: flags.append('FIN')
+        if 'R' in f: flags.append('RST')
+        if flags:
+            info += f' [{", ".join(flags)}]'
+        info += _tls_marker(bytes(tp.payload))
 
-    # Synthesise the Wireshark-style Info the parser regexes expect.
-    info = f'{sport} > {dport}' if (sport and dport) else ''
-    if flags:
-        info += f' [{", ".join(flags)}]'
-    hs = f[16]
-    if hs == '1':
-        info += ' Client Hello'
-    elif hs == '2':
-        info += ' Server Hello'
-
-    return [f[0], f[1], src, dst, f[6], f[7], info.strip()]
+    return [n, f'{float(pkt.time):.6f}', src, dst,
+            _proto_name(pkt, sport, dport, is_tcp), len(pkt), info]
 
 
-def convert_one(pcap_path: Path, out_csv: Path, tshark: str) -> int:
-    """Stream a pcapng through tshark → CSV. Returns rows written."""
-    cmd = [
-        tshark, '-r', str(pcap_path),
-        '-Y', '(ip or ipv6) and (tcp or udp)',
-        '-T', 'fields', '-E', f'separator={_SEP}', '-E', 'occurrence=f',
-    ]
-    for field in TSHARK_FIELDS:
-        cmd += ['-e', field]
-
+def convert_one(pcap_path: Path, out_csv: Path) -> int:
+    """Stream a pcapng through scapy → CSV. Returns rows written."""
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     n = 0
-    with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                          text=True, bufsize=1) as proc, \
-            out_csv.open('w', newline='') as fh:
+    with PcapReader(str(pcap_path)) as reader, out_csv.open('w', newline='') as fh:
         writer = csv.writer(fh)
         writer.writerow(CSV_HEADER)
-        assert proc.stdout is not None
-        for line in proc.stdout:
-            parts = line.rstrip('\n').split(_SEP)
-            if len(parts) < len(TSHARK_FIELDS):
-                parts += [''] * (len(TSHARK_FIELDS) - len(parts))
-            row = _build_row(parts)
+        for pkt in reader:
+            row = _row(pkt, n + 1)
             if row is not None:
                 writer.writerow(row)
                 n += 1
-        err = proc.stderr.read() if proc.stderr else ''
-    if proc.returncode not in (0, None):
-        _log.warning('tshark exit %s on %s: %s', proc.returncode, pcap_path.name, err[:200])
     return n
 
 
@@ -146,12 +144,7 @@ def main() -> None:
     p.add_argument('--out_dir', required=True,
                    help='root to write VLC_* CSV folders into (e.g. the Kaggle raw dir, '
                         'or a separate dir for a cross-dataset test split)')
-    p.add_argument('--tshark', default=shutil.which('tshark') or 'tshark')
     args = p.parse_args()
-
-    if shutil.which(args.tshark) is None:
-        _log.error('tshark not found (install Wireshark CLI). Looked for: %s', args.tshark)
-        sys.exit(1)
 
     vlc_dir, out_dir = Path(args.vlc_dir), Path(args.out_dir)
     files = sorted([*vlc_dir.rglob('*.pcapng'), *vlc_dir.rglob('*.pcap')])
@@ -168,15 +161,19 @@ def main() -> None:
             skipped += 1
             continue
         out_csv = out_dir / folder / f'{pcap.stem}.csv'
-        rows = convert_one(pcap, out_csv, args.tshark)
+        try:
+            rows = convert_one(pcap, out_csv)
+        except Exception as exc:  # noqa: BLE001
+            _log.warning('failed on %s: %s', pcap.name, exc)
+            continue
         per_folder[folder] = per_folder.get(folder, 0) + rows
         _log.info('%s → %s/%s  (%d packets)', pcap.name, folder, out_csv.name, rows)
 
     _log.info('done: %d files converted, %d skipped', len(files) - skipped, skipped)
     for folder, n in sorted(per_folder.items()):
         _log.info('  %-14s %d packets', folder, n)
-    _log.info('Now add the VLC_* FOLDER_MAP entries (already in preprocess.py) and '
-              'run preprocess_kaggle.py --raw_dir %s', out_dir)
+    _log.info('Next: run preprocess_kaggle.py --raw_dir %s (FOLDER_MAP already '
+              'includes the VLC_* folders)', out_dir)
 
 
 if __name__ == '__main__':
