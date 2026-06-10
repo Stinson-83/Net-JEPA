@@ -74,6 +74,7 @@ def run_pipeline(raw_dir: str, out_dir: str,
                  min_packets: int = MIN_PACKETS,
                  max_packets: int = MAX_PACKETS,
                  flow_timeout: float = FLOW_TIMEOUT,
+                 holdout_folders: frozenset = frozenset(),
                  seed: int = 42) -> None:
     raw_path = Path(raw_dir)
     out_path = Path(out_dir)
@@ -154,18 +155,31 @@ def run_pipeline(raw_dir: str, out_dir: str,
     indices = np.arange(len(df_all))
     src = df_all['source_file'].astype(str).values
 
+    # Holdout flows (cross-domain test, e.g. all VLC for a train-Kaggle/test-VLC
+    # generalization run): written to holdout.parquet and excluded from training
+    # entirely — not pretrain, downstream, or test.
+    if holdout_folders:
+        holdout_mask = np.array([any(f in s for f in holdout_folders) for s in src])
+    else:
+        holdout_mask = np.zeros(len(src), dtype=bool)
+    holdout_idx = indices[holdout_mask]
+    if len(holdout_idx):
+        _log.info('%d flows from holdout folders → holdout.parquet (excluded from training)',
+                  len(holdout_idx))
+
     # Pretrain-only flows (out-of-domain VLC apps): routed entirely to pretrain,
     # excluded from the supervised downstream/test sets to avoid a domain confound.
     pretrain_only_mask = np.array(
-        [any(folder in s for folder in PRETRAIN_ONLY_FOLDERS) for s in src])
+        [any(folder in s for folder in PRETRAIN_ONLY_FOLDERS) for s in src]) & ~holdout_mask
     pretrain_only_idx = indices[pretrain_only_mask]
     if len(pretrain_only_idx):
         _log.info('%d flows from pretrain-only folders → pretrain (not supervised)',
                   len(pretrain_only_idx))
 
     # Only the remaining (Kaggle + VLC_Teams) flows are split into the labelled sets.
-    splittable = indices[~pretrain_only_mask]
-    split_labels = labels[~pretrain_only_mask]
+    split_mask = ~holdout_mask & ~pretrain_only_mask
+    splittable = indices[split_mask]
+    split_labels = labels[split_mask]
 
     # Classes with only 1 sample can't be stratified — force them into pretrain
     label_counts = Counter(split_labels)
@@ -210,6 +224,9 @@ def run_pipeline(raw_dir: str, out_dir: str,
         out_path / 'downstream_train.parquet')
     df_all.iloc[idx_test].reset_index(drop=True).to_parquet(
         out_path / 'test.parquet')
+    if len(holdout_idx):
+        df_all.iloc[holdout_idx].reset_index(drop=True).to_parquet(
+            out_path / 'holdout.parquet')
 
     # ── Few-shot subsets ───────────────────────────────────────────────────
     rng = random.Random(seed)

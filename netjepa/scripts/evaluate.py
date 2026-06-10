@@ -30,6 +30,9 @@ def main():
     p.add_argument('--config',        default='netjepa/configs/default.yaml')
     p.add_argument('--checkpoint',    required=True)
     p.add_argument('--processed_dir', default=None)
+    p.add_argument('--test_parquet',  default='test.parquet',
+                   help='test split to score against (e.g. holdout.parquet for a '
+                        'train-Kaggle/test-VLC cross-domain generalization run)')
     p.add_argument('--out_dir',       default='eval_results')
     p.add_argument('--device',        default='cpu')
     args = p.parse_args()
@@ -58,8 +61,9 @@ def main():
     load_checkpoint(model, None, args.checkpoint, device)
     model.eval()
 
-    ds_test = FlowDataset(str(Path(processed_dir) / 'test.parquet'))
+    ds_test = FlowDataset(str(Path(processed_dir) / args.test_parquet))
     ds_train = FlowDataset(str(Path(processed_dir) / 'downstream_train.parquet'))
+    print(f'kNN train: downstream_train.parquet ({len(ds_train)})  |  test: {args.test_parquet} ({len(ds_test)})')
     test_loader  = DataLoader(ds_test,  batch_size=256, shuffle=False, num_workers=2)
     train_loader = DataLoader(ds_train, batch_size=256, shuffle=False, num_workers=2)
 

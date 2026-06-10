@@ -9,8 +9,11 @@ venv/
 !webui/public/data/*/umap.joblib
 *.pt
 data/processed/
+data/processed_gen/
 checkpoints/
 eval_results/
+eval_gen_indomain/
+eval_gen_crossdomain/
 wandb/
 .env
 *.egg-info/

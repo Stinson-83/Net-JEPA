@@ -22,8 +22,13 @@ def main():
                    help='flows with fewer real packets are discarded (lower = more, shorter flows)')
     p.add_argument('--max_packets',  type=int,   default=_defaults.get('max_packets', 64))
     p.add_argument('--flow_timeout', type=float, default=_defaults.get('flow_timeout_seconds', 30))
+    p.add_argument('--holdout_folders', default='',
+                   help='comma-separated folder names routed to holdout.parquet and excluded '
+                        'from training (e.g. a train-Kaggle/test-VLC generalization split)')
     p.add_argument('--seed',     type=int,   default=42)
     args = p.parse_args()
+
+    holdout = frozenset(f.strip() for f in args.holdout_folders.split(',') if f.strip())
 
     run_pipeline(args.raw_dir, args.out_dir,
                  pretrain_frac=args.pretrain,
@@ -31,6 +36,7 @@ def main():
                  min_packets=args.min_packets,
                  max_packets=args.max_packets,
                  flow_timeout=args.flow_timeout,
+                 holdout_folders=holdout,
                  seed=args.seed)
 
 
