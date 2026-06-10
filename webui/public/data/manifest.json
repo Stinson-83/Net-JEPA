@@ -2,9 +2,9 @@
   "datasets": [
     {
       "id": "phase3b_supcon",
-      "name": "Phase 3b \u2014 SupCon + isotropised (KPI-compliant)",
-      "trained_on": "2026-06-09",
-      "n_flows": 2794
+      "name": "Phase 3b \u2014 SupCon + VLC Teams",
+      "trained_on": "2026-06-10",
+      "n_flows": 2860
     }
   ],
   "active_dataset": "phase3b_supcon",
