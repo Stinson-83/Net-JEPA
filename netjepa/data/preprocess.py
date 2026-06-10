@@ -59,6 +59,14 @@ FOLDER_MAP = {
 APP2ID  = {a: i for i, a in enumerate(APP_LABELS)}
 CAT2ID  = {c: i for i, c in enumerate(CATEGORY_LABELS)}
 
+# Folders whose flows are used for self-supervised PRETRAINING ONLY — never the
+# supervised downstream_train / test sets. The out-of-domain VLC streaming apps
+# add useful representation diversity in Phase 1, but putting them in the
+# *labelled* set created a domain confound (the model learned VLC-testbed
+# artifacts and confused VLC-Teams video-conf with VLC-Netflix stored-streaming).
+# VLC_Teams is deliberately NOT here: it splits normally to boost video_conf.
+PRETRAIN_ONLY_FOLDERS = {'VLC_Netflix', 'VLC_Prime', 'VLC_YouTube', 'VLC_Roblox'}
+
 
 def run_pipeline(raw_dir: str, out_dir: str,
                  pretrain_frac: float = 0.70,
@@ -144,14 +152,28 @@ def run_pipeline(raw_dir: str, out_dir: str,
     from collections import Counter
     labels = df_all['app_label'].values
     indices = np.arange(len(df_all))
+    src = df_all['source_file'].astype(str).values
+
+    # Pretrain-only flows (out-of-domain VLC apps): routed entirely to pretrain,
+    # excluded from the supervised downstream/test sets to avoid a domain confound.
+    pretrain_only_mask = np.array(
+        [any(folder in s for folder in PRETRAIN_ONLY_FOLDERS) for s in src])
+    pretrain_only_idx = indices[pretrain_only_mask]
+    if len(pretrain_only_idx):
+        _log.info('%d flows from pretrain-only folders → pretrain (not supervised)',
+                  len(pretrain_only_idx))
+
+    # Only the remaining (Kaggle + VLC_Teams) flows are split into the labelled sets.
+    splittable = indices[~pretrain_only_mask]
+    split_labels = labels[~pretrain_only_mask]
 
     # Classes with only 1 sample can't be stratified — force them into pretrain
-    label_counts = Counter(labels)
-    rare_mask = np.array([label_counts[l] < 2 for l in labels])
-    rare_indices = indices[rare_mask]
-    normal_indices = indices[~rare_mask]
+    label_counts = Counter(split_labels)
+    rare_mask = np.array([label_counts[l] < 2 for l in split_labels])
+    rare_indices = splittable[rare_mask]
+    normal_indices = splittable[~rare_mask]
     if len(rare_indices):
-        rare_apps = [APP_LABELS[l] for l in set(labels[rare_mask])]
+        rare_apps = [APP_LABELS[l] for l in set(split_labels[rare_mask])]
         _log.info('%d flows from under-sampled classes forced into pretrain: %s',
                   len(rare_indices), rare_apps)
 
@@ -159,7 +181,7 @@ def run_pipeline(raw_dir: str, out_dir: str,
     idx_pre_normal, idx_rest = train_test_split(
         normal_indices, test_size=1 - pretrain_frac,
         stratify=normal_labels, random_state=seed)
-    idx_pre = np.concatenate([idx_pre_normal, rare_indices])
+    idx_pre = np.concatenate([idx_pre_normal, rare_indices, pretrain_only_idx])
 
     rest_labels = labels[idx_rest]
     rest_label_counts = Counter(rest_labels)
