@@ -434,6 +434,30 @@ NETJEPA_CKPT=checkpoints/phase3/final.pt DATASET_ID=phase3b_supcon \
 uvicorn server.app:app --host 0.0.0.0 --port 8000
 ```
 
+**Optional — cross-domain adaptation (Phase 2c).** Not part of the default
+production model (phase1→2b→3); use only to adapt to a new target domain (e.g.
+VLC) for which you have unlabelled captures. Requires a holdout split:
+
+```bash
+# a. Build a Kaggle-train / target-holdout split (target excluded from training)
+python3 netjepa/scripts/preprocess_kaggle.py --out_dir data/processed_gen \
+    --holdout_folders VLC_Teams,VLC_Netflix,VLC_Prime,VLC_YouTube,VLC_Roblox
+#    then split holdout.parquet → vlc_adapt.parquet (unlabelled) + vlc_test.parquet
+
+# b. Train Phase 1→2b→3 on the Kaggle-only split (--processed_dir data/processed_gen,
+#    --ckpt_dir checkpoints/gen_*), then domain-adversarially adapt to the target:
+python3 netjepa/scripts/train_phase2c.py --processed_dir data/processed_gen \
+    --target_parquet data/processed_gen/vlc_adapt.parquet \
+    --init_ckpt checkpoints/gen_phase2b/final.pt --ckpt_dir checkpoints/gen_phase2c
+
+# c. Score transfer on the held-out target test
+python3 netjepa/scripts/evaluate.py --processed_dir data/processed_gen \
+    --checkpoint checkpoints/gen_phase2c/final.pt --test_parquet vlc_test.parquet
+```
+
+> DANN aligns domains but needs a few target labels to actually lift transfer
+> (see *Domain adaptation (DANN)* above) — unsupervised alone stays ~0.05.
+
 ---
 
 ## Key Design Decisions
