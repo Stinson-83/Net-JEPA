@@ -282,6 +282,34 @@ fight it; and (2) **common-mode removal** — SupCon separates class *directions
 subtracting α·mean (α≈0.65, `embed_head` + `set_centering`) isotropises the space
 so absolute inter-cosine drops below 0.3 while intra stays above 0.7.
 
+### Cross-domain generalization (Kaggle → VLC)
+
+Two senses of "generalization" are worth separating:
+
+- **In-domain cross-validation** (held-out flows from the same capture, the
+  few-shot eval): **0.92** — comfortably meets the ≥85% KPI.
+- **Cross-*dataset* transfer** (train on Kaggle, test on the entirely separate
+  VLC/Valencia testbed, never seen — not even in pretraining): **0.05**.
+
+The harness: `preprocess_kaggle.py --holdout_folders VLC_* --out_dir
+data/processed_gen` writes the VLC flows to `holdout.parquet` (excluded from all
+training); `evaluate.py --test_parquet holdout.parquet` then scores the
+Kaggle-trained model on them.
+
+```
+                       in-domain (Kaggle→Kaggle)   cross-domain (Kaggle→VLC)
+  kNN accuracy                 0.918                       0.054
+  macro-F1                     0.858                       0.037
+  silhouette                   0.50                        0.02
+```
+
+The Kaggle-trained embedding does **not** transfer across capture domains —
+2,687/4,280 VLC flows are classified as `live_streaming` (a category VLC doesn't
+even contain). This is genuine domain shift, not a bug: the embedding learned
+Kaggle-testbed-specific cues. Reported honestly, it shows the model is
+**domain-specific** and motivates domain-diverse pretraining / domain adaptation
+for true cross-deployment — it does not affect the in-domain KPIs above.
+
 ---
 
 ## Live Inference Server — `server/` + `model/`

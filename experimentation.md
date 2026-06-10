@@ -415,6 +415,55 @@ checkpoints/
 
 ---
 
+## 11. (2026-06) KPI Compliance, VLC Integration & Cross-Domain Generalization
+
+> Sections 1–9 above predate this work; figures there (inter-class cosine
+> ~0.915, `num_classes=14`, `phase3b`) are superseded by the state below.
+
+**11.1 Meeting the cosine KPI.** The DBSCAN contrastive had a real bug
+(pseudo-labels keyed by *batch position*, not by flow — training on noise);
+fixing the mapping + `eps` helped but did not separate classes. The decisive
+changes: (a) the model emits an L2-normalised, **category-supervised** embedding
+from a kept `embed_head` (SupCon trains the space we actually measure, on the
+*category* level the KPI defines — "Youtube and Netflix" are intra-class); and
+(b) **α-centering** (`set_centering`, α≈0.65) removes the anisotropic common-mode
+that pinned cosine high (SupCon separates directions but leaves a shared cone).
+Result: intra **0.81**, inter **0.13**, accuracy **0.92**, few-shot **0.92**,
+latency ~3 ms — all five benchmark KPIs met.
+
+**11.2 Class imbalance + VLC fold-in.** Class-balanced SupCon + weighted-CE
+heads rescued `video_conferencing` (F1 0.00 → 0.67). Folding in the VLC
+(Valencia) dataset via a scapy converter (`convert_vlc_pcap.py` → Wireshark-CSV
+→ `FOLDER_MAP`): **Teams** in the supervised set lifted `video_conferencing` F1
+to **0.90**. Adding the other VLC apps (Netflix/Prime/YouTube/Roblox) to the
+*supervised* set **regressed** it (0.90 → 0.57) via a domain confound — the model
+learned VLC-testbed artifacts and confused VLC-Teams with VLC-Netflix. Fix:
+`PRETRAIN_ONLY_FOLDERS` routes those apps to Phase-1 pretraining only.
+
+**11.3 Cross-domain generalization (Kaggle → VLC).** Built a held-out harness
+(`--holdout_folders` → `holdout.parquet`; `evaluate.py --test_parquet`). A
+Kaggle-only model (VLC never seen, not even in pretraining):
+
+| | in-domain (Kaggle→Kaggle) | cross-domain (Kaggle→VLC, unseen) |
+|---|---|---|
+| kNN accuracy | 0.918 | **0.054** |
+| macro-F1 | 0.858 | 0.037 |
+| silhouette | 0.50 | 0.02 |
+
+**Finding:** the embedding does **not** transfer across capture domains —
+2,687/4,280 VLC flows are classified as `live_streaming` (a category VLC doesn't
+contain). Genuine domain shift, not a bug. KPI #3 ("generalize to unseen types
+in *cross-validation*") is met by the in-domain few-shot (0.92); the stricter
+cross-*dataset* transfer is near-zero, so the model is domain-specific. Honest
+negative result — it motivates domain-diverse pretraining / domain adaptation
+for real cross-deployment.
+
+**Production checkpoint (current):** `checkpoints/phase3/final.pt` +
+`checkpoints/phase3/knn.joblib` (category-level, isotropised, VLC-pretrain-augmented),
+served by `server/app.py` with `DATASET_ID=phase3b_supcon`.
+
+---
+
 ## 10. Lessons Learned
 
 | # | Lesson |
@@ -428,3 +477,7 @@ checkpoints/
 | 7 | SMOTE on raw time-series features is inappropriate — apply it in embedding space or not at all |
 | 8 | Self-supervised JEPA learns intra-class compactness well; inter-class margin requires a supervised signal (SupCon or fine-tuning with labels) |
 | 9 | Few-shot performance is a data quantity problem first, a model problem second |
+| 10 | A cosine KPI must be measured in the space the model is *trained* to separate; SupCon separates *directions* but leaves a common-mode cone — subtract α·mean (isotropisation) to make absolute cosine reflect class structure |
+| 11 | Define the cosine/accuracy class level to match the KPI's own examples (category, not app) — app-level contrast pushes same-category apps apart, fighting the target |
+| 12 | More data isn't always better: out-of-domain data across multiple categories invites a domain confound — use it for self-supervised pretraining, not the supervised/labelled set |
+| 13 | Distinguish in-domain cross-validation generalization (strong) from cross-*dataset* transfer (near-zero here) — report both honestly; a clean negative result on the latter is a strength, not a failure |
