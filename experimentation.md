@@ -458,6 +458,28 @@ cross-*dataset* transfer is near-zero, so the model is domain-specific. Honest
 negative result — it motivates domain-diverse pretraining / domain adaptation
 for real cross-deployment.
 
+**11.4 Domain adaptation (DANN).** To try to close the cross-domain gap, added
+domain-adversarial training (`model/domain.py` gradient-reversal + discriminator;
+`training/phase2c.py`): continue category SupCon on labelled Kaggle while a
+GRL discriminator aligns the *unlabelled* VLC distribution. Evaluated on a
+held-out VLC test (1,284 flows):
+
+| k labelled VLC / category | baseline (Kaggle-only) | DANN-adapted |
+|---|---|---|
+| 0 (unsupervised) | 0.050 | 0.056 |
+| 5 | 0.237 | 0.111 |
+| 10 | 0.266 | 0.367 |
+| 20 | 0.295 | **0.388** |
+
+**Findings:** (1) Unsupervised DANN aligns the domains (discriminator accuracy
+0.65 → 0.51) but does **not** improve transfer alone — a known DANN limitation
+under *label shift* (VLC covers only 3 of 6 categories: aligning p(x) doesn't
+align p(category|x)). (2) **Semi-supervised** DA — DANN + a few labelled target
+flows — *does* improve it (0.05 → 0.39 at k=20) and beats the baseline once
+k≥10; the adversarial alignment makes the space amenable to cheap few-shot
+target adaptation. VLC stays a hard target (0.39, not 0.85): full closure needs
+substantial target labels, at which point it's "train on target", not adaptation.
+
 **Production checkpoint (current):** `checkpoints/phase3/final.pt` +
 `checkpoints/phase3/knn.joblib` (category-level, isotropised, VLC-pretrain-augmented),
 served by `server/app.py` with `DATASET_ID=phase3b_supcon`.
@@ -481,3 +503,4 @@ served by `server/app.py` with `DATASET_ID=phase3b_supcon`.
 | 11 | Define the cosine/accuracy class level to match the KPI's own examples (category, not app) — app-level contrast pushes same-category apps apart, fighting the target |
 | 12 | More data isn't always better: out-of-domain data across multiple categories invites a domain confound — use it for self-supervised pretraining, not the supervised/labelled set |
 | 13 | Distinguish in-domain cross-validation generalization (strong) from cross-*dataset* transfer (near-zero here) — report both honestly; a clean negative result on the latter is a strength, not a failure |
+| 14 | Unsupervised domain adaptation (DANN) aligns marginal p(x) but not p(y\|x) under label shift — verify the discriminator is confused AND that target *accuracy* moves; here only a few labelled target samples (semi-supervised DA) actually improved transfer (0.05 → 0.39) |

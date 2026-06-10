@@ -310,6 +310,37 @@ Kaggle-testbed-specific cues. Reported honestly, it shows the model is
 **domain-specific** and motivates domain-diverse pretraining / domain adaptation
 for true cross-deployment — it does not affect the in-domain KPIs above.
 
+### Domain adaptation (DANN) — `netjepa/training/phase2c.py`
+
+To narrow that gap, Phase 2c adds **domain-adversarial training** (DANN): category
+SupCon continues on labelled Kaggle while a gradient-reversal domain
+discriminator (`netjepa/model/domain.py`) aligns the *unlabelled* VLC
+distribution.
+
+```
+python netjepa/scripts/train_phase2c.py --processed_dir data/processed_gen \
+    --target_parquet data/processed_gen/vlc_adapt.parquet \
+    --init_ckpt checkpoints/gen_phase2b/final.pt --ckpt_dir checkpoints/gen_phase2c
+```
+
+Measured on held-out VLC (k = labelled VLC flows per category added to the kNN):
+
+```
+   k       baseline (Kaggle-only)    DANN-adapted
+   0  (unsup)        0.050               0.056
+   5                 0.237               0.111
+  10                 0.266               0.367
+  20                 0.295               0.388
+```
+
+- **Unsupervised DANN aligns the domains** (discriminator acc 0.65 → 0.51) **but
+  doesn't improve transfer alone** — a known limitation under *label shift* (VLC
+  has 3 of 6 categories: aligning p(x) ≠ aligning p(category|x)).
+- **Semi-supervised** (DANN + a few target labels) **does**: transfer rises
+  0.05 → 0.39 and beats the baseline for k≥10 — the alignment makes the space
+  amenable to cheap few-shot target adaptation. VLC stays a hard target (0.39,
+  not 0.85); full closure needs substantial target labels.
+
 ---
 
 ## Live Inference Server — `server/` + `model/`
