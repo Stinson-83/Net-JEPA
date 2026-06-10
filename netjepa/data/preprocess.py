@@ -45,6 +45,15 @@ FOLDER_MAP = {
     'Google_Meet':        ('google_meet',  'video_conferencing'),
     'MS_Teams':           ('ms_teams',     'video_conferencing'),
     'Zoom':               ('zoom',         'video_conferencing'),
+    # ── VLC (Valencia) dataset — optional, produced by convert_vlc_pcap.py ──
+    # Reuse existing app labels so the 6-category schema is unchanged. Only the
+    # apps that map cleanly are included; Roblox is filed under metaverse (our
+    # taxonomy, not VLC's "gaming"). Folders absent → preprocess just skips them.
+    'VLC_Netflix':        ('netflix',      'stored_streaming'),
+    'VLC_Prime':          ('amazon_prime', 'stored_streaming'),
+    'VLC_YouTube':        ('youtube',      'stored_streaming'),
+    'VLC_Teams':          ('ms_teams',     'video_conferencing'),
+    'VLC_Roblox':         ('roblox',       'metaverse'),
 }
 
 APP2ID  = {a: i for i, a in enumerate(APP_LABELS)}
