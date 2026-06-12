@@ -54,6 +54,9 @@ FOLDER_MAP = {
     'VLC_YouTube':        ('youtube',      'stored_streaming'),
     'VLC_Teams':          ('ms_teams',     'video_conferencing'),
     'VLC_Roblox':         ('roblox',       'metaverse'),
+    # ── Cloud-gaming (Xbox Cloud Gaming, 5G) — carloshfm/cloud-gaming-network-telemetry.
+    # Maps to game_streaming; reuses the geforce_now app id (both are cloud gaming).
+    'CG_Xbox':            ('geforce_now',  'game_streaming'),
 }
 
 APP2ID  = {a: i for i, a in enumerate(APP_LABELS)}
@@ -65,7 +68,7 @@ CAT2ID  = {c: i for i, c in enumerate(CATEGORY_LABELS)}
 # *labelled* set created a domain confound (the model learned VLC-testbed
 # artifacts and confused VLC-Teams video-conf with VLC-Netflix stored-streaming).
 # VLC_Teams is deliberately NOT here: it splits normally to boost video_conf.
-PRETRAIN_ONLY_FOLDERS = {'VLC_Netflix', 'VLC_Prime', 'VLC_YouTube', 'VLC_Roblox'}
+PRETRAIN_ONLY_FOLDERS = {'VLC_Netflix', 'VLC_Prime', 'VLC_YouTube', 'VLC_Roblox', 'CG_Xbox'}
 
 
 def run_pipeline(raw_dir: str, out_dir: str,

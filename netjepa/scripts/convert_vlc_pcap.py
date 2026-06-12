@@ -53,6 +53,7 @@ VLC_FILE_MAP: dict[str, str] = {
     'youtube': 'VLC_YouTube',
     'teams':   'VLC_Teams',     # MS Teams → ms_teams (boosts the starved video_conf class)
     'roblox':  'VLC_Roblox',    # filed under metaverse, per Net-JEPA's taxonomy
+    'xbox':    'CG_Xbox',       # Xbox Cloud Gaming (5G) → game_streaming
 }
 
 CSV_HEADER = ['No.', 'Time', 'Source', 'Destination', 'Protocol', 'Length', 'Info']
@@ -114,8 +115,10 @@ def _row(pkt, n: int) -> list | None:
             _proto_name(pkt, sport, dport, is_tcp), len(pkt), info]
 
 
-def convert_one(pcap_path: Path, out_csv: Path) -> int:
-    """Stream a pcapng through scapy → CSV. Returns rows written."""
+def convert_one(pcap_path: Path, out_csv: Path, max_packets: int = 0) -> int:
+    """Stream a pcapng through scapy → CSV. Returns rows written. `max_packets`>0
+    caps output (huge cloud-gaming captures have millions of packets; the parser
+    only reads the first 500k rows anyway)."""
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     n = 0
     with PcapReader(str(pcap_path)) as reader, out_csv.open('w', newline='') as fh:
@@ -126,6 +129,8 @@ def convert_one(pcap_path: Path, out_csv: Path) -> int:
             if row is not None:
                 writer.writerow(row)
                 n += 1
+                if max_packets and n >= max_packets:
+                    break
     return n
 
 
@@ -144,6 +149,9 @@ def main() -> None:
     p.add_argument('--out_dir', required=True,
                    help='root to write VLC_* CSV folders into (e.g. the Kaggle raw dir, '
                         'or a separate dir for a cross-dataset test split)')
+    p.add_argument('--max_packets', type=int, default=0,
+                   help='cap packets written per file (0 = unlimited); use ~600000 for '
+                        'huge cloud-gaming captures')
     args = p.parse_args()
 
     vlc_dir, out_dir = Path(args.vlc_dir), Path(args.out_dir)
@@ -162,7 +170,7 @@ def main() -> None:
             continue
         out_csv = out_dir / folder / f'{pcap.stem}.csv'
         try:
-            rows = convert_one(pcap, out_csv)
+            rows = convert_one(pcap, out_csv, args.max_packets)
         except Exception as exc:  # noqa: BLE001
             _log.warning('failed on %s: %s', pcap.name, exc)
             continue

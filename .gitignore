@@ -25,3 +25,6 @@ server/data/
 
 # Claude Code runtime/session artifacts (locks, etc.)
 .claude/
+eval_da_baseline/
+eval_da_crossdomain/
+eval_da_adapted/
