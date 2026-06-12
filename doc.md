@@ -4,6 +4,10 @@ Net-JEPA is a Joint-Embedding Predictive Architecture for encrypted network traf
 classification. It learns flow embeddings self-supervised (no labels during pretraining)
 and uses them to classify traffic into 15 application categories across 6 coarse groups.
 
+> This is the deep engineering reference. For the structured docs set (overview, datasets,
+> tech-stack, results, features, agentic-AI write-up, presentation), see [`docs/`](docs/README.md).
+> For the honest chronological research log, see [`experimentation.md`](experimentation.md).
+
 ---
 
 ## Repository Layout
@@ -47,6 +51,25 @@ Net-JEPA/
 - Each CSV: `No., Time, Source, Destination, Protocol, Length, Info`
 - Time column: `"2022-06-17 23:48:34.871426"` (datetime string, converted to relative float)
 - Largest files: ~4.3M rows / 705 MB — capped at **500k rows per file** during parsing
+
+### Folded-in augmentation datasets
+
+Two public datasets were converted to the same Wireshark-CSV schema (via
+`netjepa/scripts/convert_vlc_pcap.py`, scapy — no tshark) and added through
+`FOLDER_MAP`. To avoid a **domain confound** (a foreign testbed's artifacts
+leaking into the labelled set), most out-of-domain apps are routed to
+**pretrain-only** via `PRETRAIN_ONLY_FOLDERS`; only the in-distribution-compatible
+MS-Teams captures join the *supervised* set. See `docs/datasets.md` for licenses.
+
+| Source | Apps used | Role |
+|---|---|---|
+| **VLC / Valencia** ([Zenodo 15121418](https://zenodo.org/records/15121418), CC-BY-4.0) | MS Teams → `ms_teams`/video_conferencing | **supervised** (rescued the starved video-conf class, F1 0.67→0.93) |
+| | Netflix / Prime / YouTube / Roblox (`VLC_*`) | **pretrain-only** (representation diversity) |
+| **Cloud-gaming telemetry** ([Kaggle `carloshfm/...`](https://www.kaggle.com/datasets/carloshfm/cloud-gaming-network-telemetry), BSD-3) | Xbox Cloud over 5G → `CG_Xbox`/game_streaming | **pretrain-only** + galaxy density (398→739 points) |
+
+Huge cloud-gaming pcaps (~1 GB / millions of packets) are capped at parse time
+with `--max_packets 600000`; only the ~5 GB of 5G captures were stream-extracted
+from the 28 GB Kaggle archive.
 
 ---
 
@@ -370,25 +393,30 @@ Measured on held-out VLC (k = labelled VLC flows per category added to the kNN):
                         └──────────────────────────────────┘
                                       │
                                       ▼
-                         server/static/index.html
+                         webui/  ("Signal Atlas" — React 19 + WebGL)
                          ┌──────────────────────────────┐
-                         │  Live dashboard               │
-                         │  • Status dot (live/error)    │
-                         │  • Stats: flows, pps,         │
-                         │    avg latency, top app/cat   │
-                         │  • Category distribution bar  │
-                         │  • Flow table: src, dst,      │
-                         │    proto, app, category,      │
-                         │    confidence bar, latency    │
+                         │  • Galaxy of 7,481 real flows │
+                         │    (regl/WebGL, UMAP layout,  │
+                         │     coloured by true class)   │
+                         │  • Click a star → packet      │
+                         │    heartbeat + verdict + k-NN │
+                         │  • Drop a .pcap → live infer, │
+                         │    pipeline streamed over /ws │
+                         │  • Model / Proof / Journey    │
+                         │    scenes; "LIVE MODEL" light │
                          └──────────────────────────────┘
 ```
+
+The front-end reads a **static export** when the server is down and the **live
+server** when it's up. Full feature tour: `docs/features.md`. (A minimal legacy
+dashboard under `server/static/` is retained as a serverless fallback.)
 
 **Environment variables:**
 
 | Variable | Default | Description |
 |---|---|---|
 | `DATASET_ID` | `phase3b_supcon` | export sub-dir under `webui/public/data` (cloud + reducer + metrics) |
-| `NETJEPA_CKPT` | `checkpoints/phase3b/final.pt` | Trained NetJEPA checkpoint for live inference |
+| `NETJEPA_CKPT` | `checkpoints/phase3/final.pt` | Trained NetJEPA checkpoint for live inference |
 | `KNN_PATH` | *(auto-detected)* | `knn.joblib` next to checkpoint |
 | `PCAP_PATH` | *(optional)* | legacy auto-replay on startup; the primary mode is upload → `POST /api/infer` |
 | `REPLAY_SPEED` | `1.0` | Replay speed multiplier |
@@ -424,10 +452,17 @@ python3 netjepa/scripts/train_phase3.py --device cuda
 python3 netjepa/scripts/evaluate.py \
     --checkpoint checkpoints/phase3/final.pt --device cuda
 
-# 6. Export artifacts for the web UI / live server (UMAP, metrics, per-flow)
+# 6a. Export artifacts for the web UI / live server (UMAP, metrics, per-flow)
 python3 netjepa/scripts/export_artifacts.py \
     --checkpoint checkpoints/phase3/final.pt \
     --dataset-id phase3b_supcon --name "Phase 3b — SupCon (balanced)" --device cuda
+
+# 6b. Export the dense, balanced galaxy cloud (full real set: pretrain+downstream+
+#     test, ground-truth coloured, capped per class). Rewrites embeddings_umap.json
+#     + flow_features/* + umap.joblib; leaves metrics/class_stats on the test split.
+python3 netjepa/scripts/export_cloud.py \
+    --checkpoint checkpoints/phase3/final.pt \
+    --dataset-id phase3b_supcon --cap 1500 --device cuda
 
 # 7. Live server (upload .pcap via POST /api/infer; stages stream over /ws)
 NETJEPA_CKPT=checkpoints/phase3/final.pt DATASET_ID=phase3b_supcon \

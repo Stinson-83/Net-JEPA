@@ -11,13 +11,32 @@
 
 ### Project Artefacts
 
-- **Technical Documentation** - Create a **docs** folder and add all technical details in markdown files inside this folder explaining the project Technical Stack, List of OSS libraries/projects used along with their links, the technical architecture of your solution, implementation details, installation instructions, user guide, salient features of the projects. Kindly add screenshots wherever possible.
-- **[Important]** Create a file `docs/ax.md` whiere you explain in detail how you utilizes open weight models and/or agentic development tools to implement your solution. Explain in detail your  Agentic AI setup , Agentic workflows, Reasoning & planning pipelines, Tool use / tool chaining, Coding assistants, agents, harness, MCP servers, agents.md, skills, Memory / context handling, Multi-agent orchestration systems, etc. Please highlight from your experience - what worked and **what did not work**.
-- **Source Code** - Create a **src** folder and add all developed project source codes (including training & benchmark evaluation codes) in the repo. The code must be capable of being successfully installed/executed and must run consistently on the intended platforms.
-- **Models Used** - *(Hugging Face links to all models used in the project. You are permitted to use only open weight models.)*
-- **Models Published** - *(In case you have developed a model as a part of your solution, kindly upload it on Hugging Face under appropriate open source license and add the link here.)*
-- **Datasets Used** - *(Links to all datasets used in the project. You are permitted to use publicly available datasets under licenses like Creative Commons, Open Data Commons, or equivalent.)*
-- **Datasets Published** - *(Links to all datasets created for the project and published on Hugging Face. You are allowed to publish any synthetic or proprietary dataset used in their project, but will be responsible for any legal compliance and permission for the same. The dataset can be published under Creative Commons, Open Data Commons, or equivalent license.)*
+- **Technical Documentation** - Full technical write-up is in the [**`docs/`**](docs/) folder
+  ([index](docs/README.md)): [overview](docs/overview.md) · [architecture](docs/architecture.md) ·
+  [datasets](docs/datasets.md) · [tech-stack & OSS libraries](docs/tech-stack.md) ·
+  [installation & usage](docs/usage.md) · [salient features](docs/features.md) ·
+  [results & KPIs](docs/results.md) · [presentation outline](docs/presentation.md).
+  A deeper engineering reference with ASCII diagrams is in [`doc.md`](doc.md), and an honest
+  chronological research log (bugs, dead-ends, fixes) is in [`experimentation.md`](experimentation.md).
+- **[Important]** Agentic-AI write-up: [**`docs/ax.md`**](docs/ax.md) — how we built this
+  human-steered with Claude Code (Opus 4.8), including **what worked and what did not**.
+- **Source Code** - All source is in this repo: `netjepa/` (core ML package — data, model, loss,
+  training phases, downstream, evaluation, scripts), `server/` (FastAPI + WebSocket inference
+  server), `capture/` + `flows/` + `model/` (live packet capture, flow grouping, classifier
+  adapter), and `webui/` (the "Signal Atlas" React/WebGL front-end). Install/run steps: [docs/usage.md](docs/usage.md).
+- **Models Used** - **None** (no pre-trained / foundation / closed-weight models). Net-JEPA is
+  trained **from scratch** on the datasets below. See [docs/tech-stack.md §4.4](docs/tech-stack.md).
+- **Models Published** - The trained Net-JEPA checkpoint (`checkpoints/phase3/final.pt`) plus the
+  fitted k-NN/UMAP reducers are produced by the pipeline and are **fully reproducible end-to-end**
+  from the scripts (gitignored due to size; a Hugging Face mirror can be added on request).
+- **Datasets Used** -
+  - [Kaggle · 5G Traffic Datasets](https://www.kaggle.com/datasets/kimdaegyeom/5g-traffic-datasets) (`kimdaegyeom/5g-traffic-datasets`) — primary training/test set.
+  - [Zenodo · VLC / Valencia Flow-Based Traffic Classification](https://zenodo.org/records/15121418) — **CC-BY-4.0** (MS Teams supervised; Netflix/Prime/YouTube/Roblox pretrain-only).
+  - [Kaggle · Cloud Gaming Network Telemetry](https://www.kaggle.com/datasets/carloshfm/cloud-gaming-network-telemetry) (`carloshfm/cloud-gaming-network-telemetry`, [GitHub](https://github.com/dcomp-leris/VR-AR-CG-network-telemetry)) — **BSD-3** (Xbox Cloud over 5G, pretrain-only).
+
+    Details, licenses, and how each was folded in: [docs/datasets.md](docs/datasets.md).
+- **Datasets Published** - None. We publish no new dataset; all sources above are already public.
+  The converted CSVs / processed parquet are reproducible from the scripts and are gitignored.
 
 #### Final Presentation
 
@@ -35,6 +54,19 @@ To ensure reproducibility of results and to verify the presented KPIs, we requir
 - Execution of all required codes to train the developed models (if any)
 - Execution of all evaluation codes to reproduce the presented results/KPIs 
 
-### Attribution 
+### Attribution
 
-In case this project is built on top of an existing open source project, please provide the original project link here. Also, mention what new features were developed. Failing to attribute the source projects may lead to disqualification during the time of evaluation.
+This project is **original work**, not a fork of an existing codebase. It is conceptually
+inspired by published research, which we credit:
+
+- **JEPA / I-JEPA** (LeCun; Assran et al., 2023) — the joint-embedding predictive idea.
+- **VICReg** (Bardes, Ponce, LeCun, 2022) — the variance/invariance/covariance anti-collapse loss.
+- **Supervised Contrastive Learning** (Khosla et al., 2020) — the category-level SupCon fine-tune.
+- **DANN** (Ganin & Lempitsky, 2015) — the gradient-reversal domain-adaptation phase.
+
+We adapted these ideas to **encrypted network-flow classification** and added our own
+contributions: a packet-shape flow encoder with RTT/context fusion, the α-centering
+("isotropisation") trick that meets the inter-class cosine KPI, category-level SupCon on a kept
+embedding, the pretrain-only vs supervised data-routing that removes a domain confound, and the
+"Signal Atlas" live demo. All OSS libraries we build on are credited in
+[docs/tech-stack.md](docs/tech-stack.md).

@@ -411,7 +411,8 @@ checkpoints/
   phase3b/knn.joblib    ← fitted kNN index for live server inference
 ```
 
-**Production checkpoint to use:** `checkpoints/phase3b/final.pt` + `checkpoints/phase3b/knn.joblib`
+**Production checkpoint to use:** *(superseded — see §11.5; the current production
+checkpoint is `checkpoints/phase3/final.pt` + `checkpoints/phase3/knn.joblib`)*
 
 ---
 
@@ -484,6 +485,39 @@ substantial target labels, at which point it's "train on target", not adaptation
 `checkpoints/phase3/knn.joblib` (category-level, isotropised, VLC-pretrain-augmented),
 served by `server/app.py` with `DATASET_ID=phase3b_supcon`.
 
+**11.5 Cloud-gaming + MS-Teams fold-in (final data state).** The galaxy looked
+sparse and uneven for the two rarest classes. The user ruled out both mocking
+*and* capping the big classes down — so we found **real** data. (a) **Cloud
+gaming:** `carloshfm/cloud-gaming-network-telemetry` (BSD-3, Xbox Cloud over 5G).
+The pcaps are ~1 GB each (millions of packets) and the full Kaggle archive is
+28 GB; we stream-extracted only the ~5 GB of 5G captures (`stream-unzip`) and
+capped parsing at `--max_packets 600000`. Routed to **pretrain-only**
+(`CG_Xbox` → game_streaming) — cross-testbed, so not in the labelled set.
+(b) **Video conferencing:** more MS-Teams captures into the *supervised* set.
+Net effect on the dense, ground-truth galaxy (`export_cloud.py`, capped 1500/class):
+
+| class | galaxy points before → after | F1 before → after |
+|---|---|---|
+| game_streaming | 398 → **739** | 0.72 → 0.71 (density was the goal) |
+| video_conferencing | 510 → **742** | 0.67 → **0.93** |
+
+Final galaxy: **7,481** real flows. Final test metrics: accuracy **0.924**,
+macro-F1 **0.897**, intra **0.81**, inter **0.138**, silhouette **0.51**.
+
+**11.6 Front-end rebuild — "Signal Atlas".** The old static dashboard was
+replaced from scratch with a React 19 + WebGL (regl) experience built for the
+Samsung judges: a fly-through **galaxy of 7,481 flows** coloured by true class
+(the cosine KPI made literal), **click-to-inspect** (packet heartbeat + verdict
++ k-NN neighbours), **drop-a-.pcap** live inference with every pipeline stage
+streamed over `/ws`, **"simulate &lt;class&gt;"** chips as a no-network fallback,
+and Model / Proof / Journey scenes. Auto-detects the server ("LIVE MODEL");
+falls back to the committed static export when it's down so the demo never
+hard-fails. Kiosk deep-links (`?skipintro`, `?scene=`, keys 1–4). Verified via
+headless WebGL screenshots. Feature tour: `docs/features.md`. Bumps along the
+way: TS6 strictness (unused locals, `verbatimModuleSyntax`, Float32Array generic
+drift), snap-confined chromium couldn't write `/tmp` (used google-chrome), and
+`websockets` 9.1 broke uvicorn's `/ws` (pinned ≥10).
+
 ---
 
 ## 10. Lessons Learned
@@ -503,4 +537,6 @@ served by `server/app.py` with `DATASET_ID=phase3b_supcon`.
 | 11 | Define the cosine/accuracy class level to match the KPI's own examples (category, not app) — app-level contrast pushes same-category apps apart, fighting the target |
 | 12 | More data isn't always better: out-of-domain data across multiple categories invites a domain confound — use it for self-supervised pretraining, not the supervised/labelled set |
 | 13 | Distinguish in-domain cross-validation generalization (strong) from cross-*dataset* transfer (near-zero here) — report both honestly; a clean negative result on the latter is a strength, not a failure |
+| 14 | When a class looks sparse, the right fix is *real* data, not mocking and not capping the majority classes down — find a permissively-licensed source and fold it in (cloud-gaming/Teams lifted density and rescued video-conf to F1 0.93) |
+| 15 | Pin transitive infra deps that the framework leans on (uvicorn ⇄ `websockets` ≥10) — a silent minor-version regression broke the entire `/ws` live stream |
 | 14 | Unsupervised domain adaptation (DANN) aligns marginal p(x) but not p(y\|x) under label shift — verify the discriminator is confused AND that target *accuracy* moves; here only a few labelled target samples (semi-supervised DA) actually improved transfer (0.05 → 0.39) |
