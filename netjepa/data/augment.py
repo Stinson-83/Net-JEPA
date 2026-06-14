@@ -93,15 +93,15 @@ def _rtt_masking(seq: np.ndarray, ctx: np.ndarray, prob: float) -> tuple:
 
 def degrade_flow(packet_seq: np.ndarray, flow_ctx: np.ndarray,
                  padding_mask: np.ndarray,
-                 change_rtt_prob:  float = 0.8,
+                 change_rtt_prob: float = 0.8,
                  change_rtt_alpha_min: float = 0.5,
                  change_rtt_alpha_max: float = 1.5,
-                 time_shift_prob:   float = 0.5,
-                 time_shift_b_min:  float = -1.0,
-                 time_shift_b_max:  float =  1.0,
-                 packet_loss_prob:  float = 0.5,
+                 time_shift_prob: float = 0.5,
+                 time_shift_b_min: float = -1.0,
+                 time_shift_b_max: float =  1.0,
+                 packet_loss_prob: float = 0.5,
                  packet_loss_window: float = 0.2,
-                 rtt_mask_prob:     float = 0.4,
+                 rtt_mask_prob: float = 0.4,
                  ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     seq  = packet_seq.copy()
     ctx  = flow_ctx.copy()
