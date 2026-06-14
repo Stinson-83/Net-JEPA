@@ -9,15 +9,15 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from ..model.netjepa    import NetJEPA
-from ..loss.vicreg      import vicreg_loss
+from ..model.netjepa import NetJEPA
+from ..loss.vicreg import vicreg_loss
 from ..loss.contrastive import (generate_pseudo_labels,
                                  dbscan_contrastive_loss)
-from ..loss.composite   import CompositeLoss
-from ..data.dataset     import FlowDataset
+from ..loss.composite import CompositeLoss
+from ..data.dataset import FlowDataset
 from ..training.scheduler import ema_momentum
-from ..utils.io         import save_checkpoint
-from ..utils.logging    import init_wandb, log_metrics, get_logger
+from ..utils.io import save_checkpoint
+from ..utils.logging import init_wandb, log_metrics, get_logger
 
 _log = get_logger('training.phase1')
 
