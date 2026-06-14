@@ -10,11 +10,10 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
-from .parser       import parse_csv
+from .parser import parse_csv
 from .flow_builder import extract_flows, MIN_PACKETS, MAX_PACKETS, FLOW_TIMEOUT
-from .rtt          import extract_rtt
-from .features     import (compute_packet_sequence, compute_flow_context,
-                           compute_src_host_stats)
+from .rtt import extract_rtt
+from .features import (compute_packet_sequence, compute_flow_context, compute_src_host_stats)
 from ..utils.logging import get_logger
 
 _log = get_logger('data.preprocess')
@@ -30,37 +29,37 @@ CATEGORY_LABELS = [
 ]
 
 FOLDER_MAP = {
-    'GeForce_Now':        ('geforce_now',  'game_streaming'),
-    'KT_GameBox':         ('kt_gamebox',   'game_streaming'),
-    'AfreecaTV':          ('afreecatv',    'live_streaming'),
-    'Naver_NOW':          ('naver_now',    'live_streaming'),
-    'YouTube_Live':       ('youtube_live', 'live_streaming'),
-    'Roblox':             ('roblox',       'metaverse'),
-    'Zepeto':             ('zepeto',       'metaverse'),
-    'Battleground':       ('battleground', 'online_game'),
-    'Teamfight_Tactics':  ('tft',          'online_game'),
-    'Amazon_Prime':       ('amazon_prime', 'stored_streaming'),
-    'Netflix':            ('netflix',      'stored_streaming'),
-    'YouTube':            ('youtube',      'stored_streaming'),
-    'Google_Meet':        ('google_meet',  'video_conferencing'),
-    'MS_Teams':           ('ms_teams',     'video_conferencing'),
-    'Zoom':               ('zoom',         'video_conferencing'),
+    'GeForce_Now': ('geforce_now', 'game_streaming'),
+    'KT_GameBox': ('kt_gamebox', 'game_streaming'),
+    'AfreecaTV': ('afreecatv', 'live_streaming'),
+    'Naver_NOW': ('naver_now', 'live_streaming'),
+    'YouTube_Live': ('youtube_live', 'live_streaming'),
+    'Roblox': ('roblox', 'metaverse'),
+    'Zepeto': ('zepeto', 'metaverse'),
+    'Battleground': ('battleground', 'online_game'),
+    'Teamfight_Tactics': ('tft', 'online_game'),
+    'Amazon_Prime': ('amazon_prime', 'stored_streaming'),
+    'Netflix': ('netflix', 'stored_streaming'),
+    'YouTube': ('youtube', 'stored_streaming'),
+    'Google_Meet': ('google_meet', 'video_conferencing'),
+    'MS_Teams': ('ms_teams', 'video_conferencing'),
+    'Zoom': ('zoom', 'video_conferencing'),
     # ── VLC (Valencia) dataset — optional, produced by convert_vlc_pcap.py ──
     # Reuse existing app labels so the 6-category schema is unchanged. Only the
     # apps that map cleanly are included; Roblox is filed under metaverse (our
     # taxonomy, not VLC's "gaming"). Folders absent → preprocess just skips them.
-    'VLC_Netflix':        ('netflix',      'stored_streaming'),
-    'VLC_Prime':          ('amazon_prime', 'stored_streaming'),
-    'VLC_YouTube':        ('youtube',      'stored_streaming'),
-    'VLC_Teams':          ('ms_teams',     'video_conferencing'),
-    'VLC_Roblox':         ('roblox',       'metaverse'),
+    'VLC_Netflix': ('netflix', 'stored_streaming'),
+    'VLC_Prime': ('amazon_prime', 'stored_streaming'),
+    'VLC_YouTube': ('youtube', 'stored_streaming'),
+    'VLC_Teams': ('ms_teams', 'video_conferencing'),
+    'VLC_Roblox': ('roblox', 'metaverse'),
     # ── Cloud-gaming (Xbox Cloud Gaming, 5G) — carloshfm/cloud-gaming-network-telemetry.
     # Maps to game_streaming; reuses the geforce_now app id (both are cloud gaming).
-    'CG_Xbox':            ('geforce_now',  'game_streaming'),
+    'CG_Xbox': ('geforce_now', 'game_streaming'),
 }
 
-APP2ID  = {a: i for i, a in enumerate(APP_LABELS)}
-CAT2ID  = {c: i for i, c in enumerate(CATEGORY_LABELS)}
+APP2ID = {a: i for i, a in enumerate(APP_LABELS)}
+CAT2ID = {c: i for i, c in enumerate(CATEGORY_LABELS)}
 
 # Folders whose flows are used for self-supervised PRETRAINING ONLY — never the
 # supervised downstream_train / test sets. The out-of-domain VLC streaming apps
@@ -141,12 +140,12 @@ def run_pipeline(raw_dir: str, out_dir: str,
             src_stats)
         records.append({
             'packet_sequence': pkt_seq.tolist(),
-            'padding_mask':    pad_mask.tolist(),
-            'flow_context':    flow_ctx.tolist(),
-            'app_label':       APP2ID[flow['app_label']],
-            'category_label':  CAT2ID[flow['category_label']],
-            'rtt_valid':       flow['rtt_valid'],
-            'source_file':     flow['source_file'],
+            'padding_mask': pad_mask.tolist(),
+            'flow_context': flow_ctx.tolist(),
+            'app_label': APP2ID[flow['app_label']],
+            'category_label': CAT2ID[flow['category_label']],
+            'rtt_valid': flow['rtt_valid'],
+            'source_file': flow['source_file'],
         })
 
     df_all = pd.DataFrame(records)
