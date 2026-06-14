@@ -3,10 +3,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .encoders  import TemporalEncoder, ContextEncoder
-from .fusion    import CrossAttentionFusionA
+from .encoders import TemporalEncoder, ContextEncoder
+from .fusion import CrossAttentionFusionA
 from .predictor import MicroPredictor
-from .ema       import EMAEncoder
+from .ema import EMAEncoder
 from ..downstream.pooling import DownstreamPoolingB
 
 
