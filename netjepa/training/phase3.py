@@ -8,12 +8,12 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from ..model.netjepa       import NetJEPA
+from ..model.netjepa import NetJEPA
 from ..downstream.classifier import LinearProbe, ShallowMLP, KNNClassifier
-from ..data.dataset        import FlowDataset
-from ..training.phase1     import _set_seeds
-from ..utils.io            import save_checkpoint, load_checkpoint
-from ..utils.logging       import init_wandb, log_metrics, get_logger
+from ..data.dataset import FlowDataset
+from ..training.phase1 import _set_seeds
+from ..utils.io import save_checkpoint, load_checkpoint
+from ..utils.logging import init_wandb, log_metrics, get_logger
 
 _log = get_logger('training.phase3')
 
