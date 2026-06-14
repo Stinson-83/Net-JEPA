@@ -8,12 +8,12 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from ..model.netjepa    import NetJEPA
-from ..loss.supcon      import supcon_loss
-from ..data.dataset     import FlowDataset, make_balanced_sampler
-from ..training.phase1  import _set_seeds
-from ..utils.io         import save_checkpoint, load_checkpoint
-from ..utils.logging    import init_wandb, log_metrics, get_logger
+from ..model.netjepa import NetJEPA
+from ..loss.supcon import supcon_loss
+from ..data.dataset import FlowDataset, make_balanced_sampler
+from ..training.phase1 import _set_seeds
+from ..utils.io import save_checkpoint, load_checkpoint
+from ..utils.logging import init_wandb, log_metrics, get_logger
 
 _log = get_logger('training.phase2b')
 
