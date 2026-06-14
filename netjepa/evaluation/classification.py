@@ -4,8 +4,7 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.metrics import (accuracy_score, f1_score, precision_score,
-                              recall_score, confusion_matrix)
+from sklearn.metrics import (accuracy_score, f1_score, precision_score, recall_score, confusion_matrix)
 
 
 def classification_report(y_true: np.ndarray, y_pred: np.ndarray,
