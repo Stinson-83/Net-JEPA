@@ -9,14 +9,14 @@ import torch
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from netjepa.model.netjepa        import NetJEPA
-from netjepa.data.dataset          import FlowDataset
-from netjepa.evaluation.embedding  import cosine_similarity_distributions, silhouette
+from netjepa.model.netjepa import NetJEPA
+from netjepa.data.dataset import FlowDataset
+from netjepa.evaluation.embedding import cosine_similarity_distributions, silhouette
 from netjepa.evaluation.classification import classification_report
-from netjepa.evaluation.fewshot    import few_shot_eval
-from netjepa.training.phase3       import _collect_embeddings
+from netjepa.evaluation.fewshot import few_shot_eval
+from netjepa.training.phase3 import _collect_embeddings
 from netjepa.downstream.classifier import KNNClassifier
-from netjepa.utils.io              import load_checkpoint
+from netjepa.utils.io import load_checkpoint
 from torch.utils.data import DataLoader
 
 
