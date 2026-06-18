@@ -295,7 +295,7 @@ PHASE 3 — Downstream Classification  (50 epochs)
 | Inter-class cosine | < 0.3 | **0.13** ✅ |
 | Classification accuracy | ≥ 90% | **0.918** (kNN) ✅ |
 | Generalization (few-shot η≥3) | ≥ 85% | **0.91** ✅ |
-| Real-time per flow | < 100 ms | **~3 ms** ✅ |
+| Real-time per flow | < 100 ms | **4.5 ms** ✅ |
 
 macro-F1 **0.858**, silhouette **0.50**. Reaching the cosine targets needed two
 things together: (1) **category-level SupCon** — the KPI defines class at the

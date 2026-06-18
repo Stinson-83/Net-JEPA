@@ -33,6 +33,6 @@ Honest chronological research log (bugs, dead ends, fixes): [`../experimentation
 | Inter-class cosine | < 0.3 | **0.14** ✅ |
 | Classification accuracy | ≥ 90% | **92.4%** ✅ |
 | Generalization (few-shot CV) | ≥ 85% | **92%** ✅ |
-| Real-time latency / flow | < 100 ms | **~3 ms** (CPU) ✅ |
+| Real-time latency / flow | < 100 ms | **4.5 ms** (CPU) ✅ |
 
 macro-F1 **0.90** · 6 categories · 128-D embedding · self-supervised on ~18k flows · runs on CPU.

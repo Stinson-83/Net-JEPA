@@ -430,7 +430,7 @@ from a kept `embed_head` (SupCon trains the space we actually measure, on the
 (b) **α-centering** (`set_centering`, α≈0.65) removes the anisotropic common-mode
 that pinned cosine high (SupCon separates directions but leaves a shared cone).
 Result: intra **0.81**, inter **0.13**, accuracy **0.92**, few-shot **0.92**,
-latency ~3 ms — all five benchmark KPIs met.
+latency ~4.5 ms — all five benchmark KPIs met.
 
 **11.2 Class imbalance + VLC fold-in.** Class-balanced SupCon + weighted-CE
 heads rescued `video_conferencing` (F1 0.00 → 0.67). Folding in the VLC

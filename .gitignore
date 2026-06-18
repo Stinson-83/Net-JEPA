@@ -28,3 +28,7 @@ server/data/
 eval_da_baseline/
 eval_da_crossdomain/
 eval_da_adapted/
+
+# Local pitch deck (not tracked)
+Net-JEPA_Deck.pptx
+scripts_deck/

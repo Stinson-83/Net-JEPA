@@ -51,7 +51,7 @@ The five-KPI table, all ✅:
 | Inter cosine | <0.3 | **0.14** |
 | Accuracy | ≥90% | **92.4%** |
 | Generalization | ≥85% | **92%** |
-| Latency | <100 ms | **~3 ms** (CPU) |
+| Latency | <100 ms | **4.5 ms** (CPU) |
 
 macro-F1 **0.90**. Runs on CPU.
 

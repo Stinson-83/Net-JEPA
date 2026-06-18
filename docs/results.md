@@ -12,7 +12,7 @@ cases are on the table.
 | Inter-class cosine | < 0.3 | **0.14** ✅ |
 | Accuracy | ≥ 90% | **92.4%** ✅ |
 | Generalization (few-shot CV) | ≥ 85% | **92%** ✅ |
-| Real-time latency / flow | < 100 ms | **~3 ms** CPU / **~1.5 ms** GPU ✅ |
+| Real-time latency / flow | < 100 ms | **4.5 ms** CPU / **5.3 ms** GPU ✅ |
 
 macro-F1 **0.897** · silhouette **0.51**.
 
@@ -72,7 +72,7 @@ beats the baseline. The realistic route to a new network is a handful of target 
 
 ## 5.6 Efficiency
 
-- **~3 ms / flow on CPU** (p95), ~1.5 ms on GPU. No GPU required to serve.
+- **4.5 ms / flow on CPU** (p95), 5.3 ms on GPU. No GPU required to serve.
 - Model is small (a few M parameters); the live server holds the whole pipeline in memory.
 
 ## 5.7 What we'd do with more time
