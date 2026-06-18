@@ -1,79 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#12122A"/>
-      <stop offset="100%" stop-color="#0D1A2A"/>
-    </linearGradient>
-    <clipPath id="clip">
-      <rect width="512" height="512" rx="113" ry="113"/>
-    </clipPath>
-    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="12.8" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-  </defs>
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="150" viewBox="0 0 560 150" fill="none">
+  <g transform="translate(6,9) scale(1.3200)">
+    
+  <!-- left facet (light) -->
+  <path d="M 50 14 L 16 86 L 50 86 Z"
+        fill="#4E7C99" stroke-linejoin="round"/>
+  <!-- right facet (shadow) -->
+  <path d="M 50 14 L 50 86 L 84 86 Z"
+        fill="#37596F" stroke-linejoin="round"/>
+  <!-- detached node shard -->
+  <path d="M 6 86 L 22 86 L 14 64 Z" fill="#4E7C99" stroke-linejoin="round"/>
 
-  <!-- background -->
-  <rect width="512" height="512" rx="113" fill="url(#bg)"/>
-
-  <!-- subtle grid -->
-  <g clip-path="url(#clip)" opacity="0.06">
-    <line x1="0" y1="0" x2="0" y2="512" stroke="#fff" stroke-width="0.8"/><line x1="64" y1="0" x2="64" y2="512" stroke="#fff" stroke-width="0.8"/><line x1="128" y1="0" x2="128" y2="512" stroke="#fff" stroke-width="0.8"/><line x1="192" y1="0" x2="192" y2="512" stroke="#fff" stroke-width="0.8"/><line x1="256" y1="0" x2="256" y2="512" stroke="#fff" stroke-width="0.8"/><line x1="320" y1="0" x2="320" y2="512" stroke="#fff" stroke-width="0.8"/><line x1="384" y1="0" x2="384" y2="512" stroke="#fff" stroke-width="0.8"/><line x1="448" y1="0" x2="448" y2="512" stroke="#fff" stroke-width="0.8"/><line x1="512" y1="0" x2="512" y2="512" stroke="#fff" stroke-width="0.8"/>
-    <line x1="0" y1="0" x2="512" y2="0" stroke="#fff" stroke-width="0.8"/><line x1="0" y1="64" x2="512" y2="64" stroke="#fff" stroke-width="0.8"/><line x1="0" y1="128" x2="512" y2="128" stroke="#fff" stroke-width="0.8"/><line x1="0" y1="192" x2="512" y2="192" stroke="#fff" stroke-width="0.8"/><line x1="0" y1="256" x2="512" y2="256" stroke="#fff" stroke-width="0.8"/><line x1="0" y1="320" x2="512" y2="320" stroke="#fff" stroke-width="0.8"/><line x1="0" y1="384" x2="512" y2="384" stroke="#fff" stroke-width="0.8"/><line x1="0" y1="448" x2="512" y2="448" stroke="#fff" stroke-width="0.8"/><line x1="0" y1="512" x2="512" y2="512" stroke="#fff" stroke-width="0.8"/>
   </g>
-
-  <!-- glow halos -->
-  <circle cx="163.8" cy="194.6" r="112.6"
-          fill="#5B5BD6" fill-opacity="0.10" filter="url(#glow)"/>
-  <circle cx="348.2" cy="194.6" r="112.6"
-          fill="#0FB5A6" fill-opacity="0.10" filter="url(#glow)"/>
-
-  <!-- edges -->
-  <path d="M163.8,194.6 Q256.0,161.4 348.2,194.6" fill="none" stroke="#FFFFFF" stroke-width="1.6" stroke-opacity="0.2" stroke-linecap="round" stroke-dasharray="4 3"/>
-  <path d="M175.1,217.1 Q228.5,265.0 239.1,335.9" fill="none" stroke="#5B5BD6" stroke-width="3.6" stroke-opacity="0.45" stroke-linecap="round" />
-  <path d="M336.9,217.1 Q326.3,288.0 272.9,335.9" fill="none" stroke="#0FB5A6" stroke-width="3.6" stroke-opacity="0.45" stroke-linecap="round" />
-  <path d="M163.8,172.0 Q256.0,138.9 348.2,172.0" fill="none" stroke="#5B5BD6" stroke-width="5.6" stroke-opacity="0.85" stroke-linecap="round" />
-  <polygon points="314.4,172.0 301.8,165.8 301.4,177.3" fill="#5B5BD6" opacity="0.85"/>
-  <circle cx="256.0" cy="358.4" r="73.2" fill="#F59E0B" fill-opacity="0.08"/>
-
-  <!-- nodes -->
-  
-    <defs>
-      <radialGradient id="gA" cx="35%" cy="35%" r="65%">
-        <stop offset="0%" stop-color="#5B5BD6" stop-opacity="0.9"/>
-        <stop offset="100%" stop-color="#5B5BD6" stop-opacity="0.35"/>
-      </radialGradient>
-    </defs>
-    <circle cx="163.8" cy="194.6" r="43.6"
-            fill="#5B5BD6" fill-opacity="0.12"/>
-    <circle cx="163.8" cy="194.6" r="28.2"
-            fill="url(#gA)" stroke="#5B5BD6" stroke-width="6.2"/>
-  
-    <defs>
-      <radialGradient id="gB" cx="35%" cy="35%" r="65%">
-        <stop offset="0%" stop-color="#0FB5A6" stop-opacity="0.9"/>
-        <stop offset="100%" stop-color="#0FB5A6" stop-opacity="0.35"/>
-      </radialGradient>
-    </defs>
-    <circle cx="348.2" cy="194.6" r="43.6"
-            fill="#0FB5A6" fill-opacity="0.12"/>
-    <circle cx="348.2" cy="194.6" r="28.2"
-            fill="url(#gB)" stroke="#0FB5A6" stroke-width="6.2"/>
-  
-    <defs>
-      <radialGradient id="gC" cx="35%" cy="35%" r="65%">
-        <stop offset="0%" stop-color="#F59E0B" stop-opacity="0.9"/>
-        <stop offset="100%" stop-color="#F59E0B" stop-opacity="0.35"/>
-      </radialGradient>
-    </defs>
-    <circle cx="256.0" cy="358.4" r="34.0"
-            fill="#F59E0B" fill-opacity="0.12"/>
-    <circle cx="256.0" cy="358.4" r="22.0"
-            fill="url(#gC)" stroke="#F59E0B" stroke-width="4.8"/>
-
-  <!-- "NJ" micro letterform, bottom-right corner -->
-  <text x="451" y="484"
-        font-family="'SF Pro Display','Inter',sans-serif"
-        font-size="38" font-weight="800" fill="#fff" fill-opacity="0.18"
-        text-anchor="middle">NJ</text>
+  <text x="158" y="74"
+        font-family="'Helvetica Neue',Arial,'DejaVu Sans',sans-serif"
+        font-size="52" font-weight="700" letter-spacing="-1" fill="#3D5E72">Net-JEPA</text>
+  <text x="160" y="104"
+        font-family="'Helvetica Neue',Arial,'DejaVu Sans',sans-serif"
+        font-size="18" font-weight="500" letter-spacing="0.5" fill="#8A9AA6">The shape of encrypted traffic</text>
 </svg>
