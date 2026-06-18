@@ -32,11 +32,12 @@ export default function TopBar() {
     <header className="relative z-30 flex h-[60px] shrink-0 items-center gap-4 px-5">
       {/* wordmark */}
       <button onClick={() => setScene('atlas')} className="group flex items-center gap-3">
-        <div className="relative grid h-9 w-9 place-items-center rounded-[11px]"
-          style={{ background: 'linear-gradient(140deg, #4fd6ff22, #7c5cff22)', border: '1px solid var(--nj-border-hi)' }}>
-          <span className="absolute inset-0 rounded-[11px]" style={{ boxShadow: 'inset 0 0 16px -4px var(--nj-accent-glow)' }} />
-          <NetGlyph />
-        </div>
+        <img
+          src="/logo.svg"
+          alt="Net-JEPA"
+          className="h-9 w-9 rounded-[11px] transition-transform group-hover:scale-105"
+          style={{ boxShadow: '0 0 12px -2px var(--nj-accent-glow)' }}
+        />
         <div className="leading-none">
           <div className="nj-display text-[15px] font-bold tracking-tight">
             <span className="nj-sheen">NET-JEPA</span>
@@ -93,14 +94,3 @@ export default function TopBar() {
   );
 }
 
-function NetGlyph() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle cx="6" cy="6" r="2" fill="var(--nj-accent)" />
-      <circle cx="18" cy="7" r="1.6" fill="var(--nj-accent-2)" />
-      <circle cx="7" cy="18" r="1.6" fill="#f637ec" />
-      <circle cx="17" cy="17" r="2.2" fill="#4ade80" />
-      <path d="M6 6 18 7M6 6 7 18M18 7 17 17M7 18 17 17M6 6 17 17" stroke="var(--nj-border-hi)" strokeWidth="1" />
-    </svg>
-  );
-}

@@ -1,5 +1,9 @@
 # Net-JEPA — Architecture & Workflow
 
+<p align="center">
+  <img src="docs/assets/logo.svg" alt="Net-JEPA logo" width="120"/>
+</p>
+
 Net-JEPA is a Joint-Embedding Predictive Architecture for encrypted network traffic
 classification. It learns flow embeddings self-supervised (no labels during pretraining)
 and uses them to classify traffic into 15 application categories across 6 coarse groups.
