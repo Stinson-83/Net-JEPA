@@ -48,7 +48,7 @@ The downstream embedding is the part the cosine KPI measures, so it gets special
    them in a shared cone (high absolute cosine). Subtracting α·mean and re-normalising
    isotropises the space, dropping inter-class cosine below 0.3 while intra stays above 0.7.
 
-Classification is a **cosine k-NN (k=5)** over the labelled embeddings — ~3 ms on CPU.
+Classification is a **cosine k-NN (k=5)** over the labelled embeddings — ~4.5 ms on CPU.
 
 ## 2.4 Training phases
 

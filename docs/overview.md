@@ -29,7 +29,7 @@ learns **self-supervised** by predicting masked parts of a flow against a slow-m
 **contrastive** fine-tune (SupCon) on the 6 coarse categories, plus a **common-mode
 removal** (α-centering) trick, shapes a 128-D unit-sphere embedding where same-class flows
 point together and different-class flows are nearly orthogonal. A cosine **k-NN** then
-classifies in ~3 ms on CPU.
+classifies in ~4.5 ms on CPU.
 
 ## The six categories
 
@@ -50,7 +50,7 @@ classifies in ~3 ms on CPU.
 | Inter-class cosine | < 0.3 | **0.14** | α-centering removes the anisotropic common-mode |
 | Accuracy | ≥ 90% | **92.4%** | Cosine k-NN on the isotropised embedding |
 | Generalization | ≥ 85% | **92%** | Few-shot cross-validation (held-out flows) |
-| Real-time | < 100 ms | **~3 ms** (CPU) | Lightweight encoder, no GPU needed to serve |
+| Real-time | < 100 ms | **4.5 ms** (CPU) | Lightweight encoder, no GPU needed to serve |
 
 Plus **macro-F1 0.90**. See [results.md](results.md) for per-class numbers and the honest
 cross-*dataset* generalization story (a deliberately reported limitation).
@@ -62,6 +62,6 @@ cross-*dataset* generalization story (a deliberately reported limitation).
 - **Hits every KPI**, including the hard cosine targets that naïve approaches miss.
 - **Honest evaluation** — we report where it *fails* (cross-domain transfer) and the
   domain-adaptation fix, rather than hiding it.
-- **Runs in real time on CPU** — ~3 ms/flow, deployable at the edge.
+- **Runs in real time on CPU** — ~4.5 ms/flow, deployable at the edge.
 - **A demo judges can *play* with** — a live "atlas" of 7,481 real flows; drop in a `.pcap`
   and watch the model classify it. See [features.md](features.md).
