@@ -1,7 +1,7 @@
 # Net-JEPA — Architecture & Workflow
 
 <p align="center">
-  <img src="docs/assets/logo.svg" alt="Net-JEPA logo" width="120"/>
+  <img src="docs/assets/netjepa_logo.png" alt="Net-JEPA logo" width="120"/>
 </p>
 
 Net-JEPA is a Joint-Embedding Predictive Architecture for encrypted network traffic
