@@ -29,7 +29,7 @@ demo: install ## Run the live demo: inference server (weights auto-download from
 	@$(PY) -m uvicorn server.app:app --app-dir src --host 0.0.0.0 --port $(PORT) > netjepa-server.log 2>&1 & echo $$! > .netjepa-server.pid
 	@printf "→ waiting for the model to load"; until curl -s --max-time 3 http://localhost:$(PORT)/api/health >/dev/null 2>&1; do printf "."; sleep 1; done; echo " ready (server logs: netjepa-server.log)"
 	@echo "→ launching the Signal Atlas UI — Ctrl-C stops the UI, then run 'make stop' to stop the server"
-	cd webui && npm run dev
+	cd webui && VITE_PROXY_TARGET=http://localhost:$(PORT) npm run dev
 
 stop: ## Stop the inference server started by 'make demo'
 	@kill `cat .netjepa-server.pid 2>/dev/null` 2>/dev/null && echo "server stopped" || echo "(no server running)"; rm -f .netjepa-server.pid
@@ -69,7 +69,7 @@ export: install ## Re-export atlas artifacts + galaxy cloud for the UI
 serve: install ## Inference server only (auto-downloads weights from HF if missing)
 	$(PY) -m uvicorn server.app:app --app-dir src --host 0.0.0.0 --port $(PORT)
 webui: install ## Signal Atlas UI only (Vite dev server -> http://localhost:5173)
-	cd webui && npm run dev
+	cd webui && VITE_PROXY_TARGET=http://localhost:$(PORT) npm run dev
 
 ##@ Utilities
 clean: ## Remove caches, eval outputs, server logs (keeps fetched weights/data + installed deps)
