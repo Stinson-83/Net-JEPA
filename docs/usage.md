@@ -35,8 +35,10 @@ python src/netjepa/scripts/fetch_assets.py            # weights (HF) + data (Kag
 - **Weights** come from `kritikahd007/net-jepa` — **no token needed** (public).
 - **Data** uses `kagglehub`, so set Kaggle API creds (`KAGGLE_USERNAME`/`KAGGLE_KEY` or
   `~/.kaggle/kaggle.json`) and accept the dataset's terms on its Kaggle page first.
-- The published checkpoint also folds in optional **VLC** (CC-BY-4.0) + **cloud-gaming** (BSD-3)
-  captures on top of the 5G base — see [datasets.md](datasets.md) to add them for the exact config.
+- The published checkpoint also folds in **VLC** (CC-BY-4.0) + **cloud-gaming** (BSD-3) captures on
+  top of the 5G base. Add them with `--with-foldins` to match it exactly — **LARGE** (VLC ≈23 GB +
+  cloud-gaming ≈28 GB), or grab just the high-value MS-Teams boost (≈2.6 GB) with
+  `--with-foldins --foldin-apps teams`. Details: [datasets.md §3.6](datasets.md).
 
 ### Way 1 — pretrained (fast): reproduce the KPIs without training
 
@@ -71,7 +73,10 @@ works **fully offline** off the committed static export.
 ```bash
 # 1. Get the raw 5G data → parquet. Fetch from Kaggle automatically …
 python src/netjepa/scripts/fetch_assets.py --data-only
-#    … or, if you already have the raw 5G CSVs locally:
+#    …to match the PUBLISHED checkpoint exactly, also fold in VLC + cloud-gaming
+#    (LARGE; or '--foldin-apps teams' for just the video-conf boost, ~2.6 GB):
+#    python src/netjepa/scripts/fetch_assets.py --data-only --with-foldins
+#    …or, if you already have the raw 5G CSVs locally:
 #    python src/netjepa/scripts/preprocess_kaggle.py --raw_dir <path-to-5G_Traffic_Datasets>
 
 # 2. Phase 1 — self-supervised pretraining (~15–25 min on GPU)

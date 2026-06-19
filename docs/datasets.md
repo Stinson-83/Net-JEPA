@@ -55,6 +55,19 @@ dashboard still reports the full, true distribution on the test split).
 
 ## 3.6 Reproducing the fold-in
 
+**Automated (recommended).** `fetch_assets.py --with-foldins` downloads the VLC apps from
+Zenodo (filtered) + the cloud-gaming captures from Kaggle, converts them, and stages them with
+the 5G base for a single preprocess pass:
+
+```bash
+# exact published config (LARGE: VLC ≈23 GB + cloud-gaming ≈28 GB)
+python src/netjepa/scripts/fetch_assets.py --data-only --with-foldins
+# …or just the high-value MS-Teams boost (≈2.6 GB), no cloud-gaming:
+python src/netjepa/scripts/fetch_assets.py --data-only --with-foldins --foldin-apps teams
+```
+
+**Manual (lower level).** Convert raw captures yourself, then preprocess:
+
 ```bash
 # convert raw captures → Wireshark CSV (scapy; --max_packets caps huge cloud-gaming files)
 python src/netjepa/scripts/convert_vlc_pcap.py --vlc_dir <raw_dir> \
