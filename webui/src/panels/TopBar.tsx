@@ -33,7 +33,7 @@ export default function TopBar() {
       {/* wordmark */}
       <button onClick={() => setScene('atlas')} className="group flex items-center gap-3">
         <img
-          src="/logo.svg"
+          src="/netjepa_logo.png"
           alt="Net-JEPA"
           className="h-9 w-9 rounded-[11px] transition-transform group-hover:scale-105"
           style={{ boxShadow: '0 0 12px -2px var(--nj-accent-glow)' }}
