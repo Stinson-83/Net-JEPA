@@ -8,6 +8,20 @@ Net-JEPA is a Joint-Embedding Predictive Architecture for encrypted network traf
 classification. It learns flow embeddings self-supervised (no labels during pretraining)
 and uses them to classify traffic into 15 application categories across 6 coarse groups.
 
+<p align="center">
+  <a href="https://pytorch.org"><img src="https://img.shields.io/badge/PyTorch-EE4C2C?style=flat-square&logo=pytorch&logoColor=white" alt="PyTorch"/></a>
+  <a href="https://scikit-learn.org"><img src="https://img.shields.io/badge/scikit--learn-F7931E?style=flat-square&logo=scikit-learn&logoColor=white" alt="scikit-learn"/></a>
+  <a href="https://numpy.org"><img src="https://img.shields.io/badge/NumPy-013243?style=flat-square&logo=numpy&logoColor=white" alt="NumPy"/></a>
+  <a href="https://pandas.pydata.org"><img src="https://img.shields.io/badge/pandas-150458?style=flat-square&logo=pandas&logoColor=white" alt="pandas"/></a>
+  <a href="https://fastapi.tiangolo.com"><img src="https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI"/></a>
+  <a href="https://scapy.net"><img src="https://img.shields.io/badge/Scapy-007ACC?style=flat-square&logo=python&logoColor=white" alt="Scapy"/></a>
+  <a href="https://umap-learn.readthedocs.io"><img src="https://img.shields.io/badge/UMAP-6A0DAD?style=flat-square&logo=python&logoColor=white" alt="UMAP"/></a>
+  <a href="https://react.dev"><img src="https://img.shields.io/badge/React-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React"/></a>
+  <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript"/></a>
+  <a href="https://tailwindcss.com"><img src="https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white" alt="Tailwind CSS"/></a>
+  <a href="https://vite.dev"><img src="https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite"/></a>
+</p>
+
 > This is the deep engineering reference. For the structured docs set (overview, datasets,
 > tech-stack, results, features, agentic-AI write-up, presentation), see [`docs/`](docs/README.md).
 > For the honest chronological research log, see [`experimentation.md`](experimentation.md).
