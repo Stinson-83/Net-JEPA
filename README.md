@@ -38,13 +38,16 @@
   (`HF_TOKEN=… python src/netjepa/scripts/publish_hf.py --repo-id <user>/net-jepa`); checkpoint is
   also reproducible end-to-end from the training scripts.
 - **Datasets Used** -
-  - [Kaggle · 5G Traffic Datasets](https://www.kaggle.com/datasets/kimdaegyeom/5g-traffic-datasets) (`kimdaegyeom/5g-traffic-datasets`) — primary training/test set.
+  - [Kaggle · 5G Traffic Datasets](https://www.kaggle.com/datasets/kimdaegyeom/5g-traffic-datasets) (`kimdaegyeom/5g-traffic-datasets`) — primary training/test set. **License "Unknown" on Kaggle**, so we use it under Kaggle's terms and **don't redistribute it** — `fetch_assets.py` pulls it from source and preprocesses locally.
   - [Zenodo · VLC / Valencia Flow-Based Traffic Classification](https://zenodo.org/records/15121418) — **CC-BY-4.0** (MS Teams supervised; Netflix/Prime/YouTube/Roblox pretrain-only).
   - [Kaggle · Cloud Gaming Network Telemetry](https://www.kaggle.com/datasets/carloshfm/cloud-gaming-network-telemetry) (`carloshfm/cloud-gaming-network-telemetry`, [GitHub](https://github.com/dcomp-leris/VR-AR-CG-network-telemetry)) — **BSD-3** (Xbox Cloud over 5G, pretrain-only).
 
     Details, licenses, and how each was folded in: [docs/datasets.md](docs/datasets.md).
-- **Datasets Published** - None. We publish no new dataset; all sources above are already public.
-  The converted CSVs / processed parquet are reproducible from the scripts and are gitignored.
+- **Datasets Published** - None — and deliberately so: our preprocessed parquet derives from the
+  primary 5G set whose license is **"Unknown"**, so we have no clear right to re-host a derivative.
+  Instead it is **rebuilt from source on demand** — `python src/netjepa/scripts/fetch_assets.py`
+  downloads the raw data from Kaggle (under your Kaggle terms) and preprocesses locally. The
+  processed parquet stays gitignored. See [docs/datasets.md §3.7](docs/datasets.md).
 
 #### Final Presentation
 

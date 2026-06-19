@@ -5,7 +5,8 @@ the unevenness in the cloud reflects real-world capture sizes.
 
 ## 3.1 Primary — 5G Traffic Dataset (Korea)
 
-- **Source:** [Kaggle · 5G Traffic Datasets](https://www.kaggle.com/datasets/kimdaegyeom/5g-traffic-datasets) (`kimdaegyeom/5g-traffic-datasets`)
+- **Source:** [Kaggle · 5G Traffic Datasets](https://www.kaggle.com/datasets/kimdaegyeom/5g-traffic-datasets) (`kimdaegyeom/5g-traffic-datasets`); original on [IEEE DataPort](https://ieee-dataport.org/documents/5g-traffic-datasets) (Choi, Kim, Ko — Kwangwoon University; DOI `10.21227/ewhk-n061`).
+- **License:** **listed as "Unknown" on Kaggle** (and no explicit open license on IEEE DataPort). We therefore **use it from the source under Kaggle's terms but do not redistribute it or any derivative** — `fetch_assets.py` pulls it from Kaggle and preprocesses locally (see §3.7).
 - **Format:** Wireshark CSV exports (`No., Time, Source, Destination, Protocol, Length, Info`)
 - **Scope:** 15 apps across the 6 categories, captured on 5G.
 - **Role:** the core training + test set. ~22,900 flows after flow-building (≥5 packets).
@@ -61,7 +62,14 @@ python src/netjepa/scripts/convert_vlc_pcap.py --vlc_dir <raw_dir> \
 # then re-run the pipeline (preprocess → phase1 → phase2b → phase3 → export)
 ```
 
-## 3.7 Datasets we publish
+## 3.7 Datasets we publish (and why we don't republish the processed data)
 
-We don't publish a new dataset; all sources above are already public. The converted CSVs
-and processed parquet are reproducible from the scripts and are gitignored (not shipped).
+We publish **no new dataset**. All sources above are already public, and we deliberately do
+**not** redistribute our preprocessed parquet: it derives from the primary 5G dataset, whose
+license is **"Unknown"** (§3.1), so we have no clear right to re-host a derivative. Instead the
+processed data is **rebuilt from source on demand**: `python src/netjepa/scripts/fetch_assets.py`
+downloads the raw 5G captures from Kaggle (under your own Kaggle account/terms) and runs
+`preprocess_kaggle.py` locally. The processed parquet is gitignored (not shipped). This keeps
+reproduction one command away while staying within the source licenses. (The VLC and cloud-gaming
+fold-ins **are** permissively licensed — CC-BY-4.0 and BSD-3 — and could be redistributed with
+attribution, but for simplicity they too are fetched from source.)

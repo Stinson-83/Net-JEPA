@@ -19,3 +19,7 @@ websockets>=10
 python-multipart>=0.0.6
 joblib>=1.3.0
 umap-learn>=0.5.4
+# Asset fetching: pretrained weights from Hugging Face + raw dataset from Kaggle
+# (used by src/netjepa/scripts/fetch_assets.py and the server's weights fallback).
+huggingface_hub>=0.17.0
+kagglehub>=0.2.0

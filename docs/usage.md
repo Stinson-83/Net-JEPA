@@ -19,16 +19,41 @@ makes `netjepa`, `server`, etc. importable from any directory. You can skip it i
 training/eval scripts self-bootstrap their import path, and the server can be launched with
 `--app-dir src` (shown below).
 
-## 6.3 Run the live demo (the fast path)
+## 6.3 Get the model + data, then run
 
-The trained checkpoints + the exported atlas data are produced by the pipeline. With them
-in place you can run the demo directly — two processes:
+Two things are **not** committed to the repo and must be fetched: the trained **weights**
+(published on Hugging Face) and the **preprocessed data** (rebuilt from the raw 5G dataset on
+Kaggle — its license is *"Unknown"*, so we don't redistribute it; you pull it from the source).
+One command gets both:
 
 ```bash
-# Terminal A — inference server (defaults are already correct)
+python src/netjepa/scripts/fetch_assets.py            # weights (HF) + data (Kaggle → preprocess)
+#   --weights-only   just the model (enough for the live demo)
+#   --data-only      just the data (needed to evaluate / train)
+```
+
+- **Weights** come from `kritikahd007/net-jepa` — **no token needed** (public).
+- **Data** uses `kagglehub`, so set Kaggle API creds (`KAGGLE_USERNAME`/`KAGGLE_KEY` or
+  `~/.kaggle/kaggle.json`) and accept the dataset's terms on its Kaggle page first.
+- The published checkpoint also folds in optional **VLC** (CC-BY-4.0) + **cloud-gaming** (BSD-3)
+  captures on top of the 5G base — see [datasets.md](datasets.md) to add them for the exact config.
+
+### Way 1 — pretrained (fast): reproduce the KPIs without training
+
+```bash
+python src/netjepa/scripts/fetch_assets.py                                    # weights + data
+python src/netjepa/scripts/evaluate.py --checkpoint checkpoints/phase3/final.pt
+#   → prints the KPI summary: intra/inter cosine, kNN accuracy, few-shot, latency
+```
+
+### Way 2 — from scratch: train everything → see §6.4.
+
+### Run the live demo (either way)
+
+```bash
+# Terminal A — inference server (auto-downloads the weights from HF on first run if missing)
 uvicorn server.app:app --host 0.0.0.0 --port 8000
 #   if you skipped `pip install -e .`, add  --app-dir src  to the line above
-#   NETJEPA_CKPT=checkpoints/phase3/final.pt   DATASET_ID=phase3b_supcon
 #   sanity check:  curl localhost:8000/api/health   → {"ok": true, ...}
 
 # Terminal B — the Signal Atlas web UI
@@ -36,16 +61,18 @@ cd webui && npm run dev          # → http://localhost:5173
 ```
 
 Open the printed URL. The UI auto-detects the server ("LIVE MODEL" lights up) and also
-works **fully offline** off the committed static export. Production build: `npm run build`.
+works **fully offline** off the committed static export.
 
 **Kiosk / demo deep-links:** `?skipintro` jumps straight to the Atlas; `?scene=proof`
 (or `model` / `journey`) opens a specific scene; keys `1–4` switch scenes.
 
-## 6.4 Train from scratch (only if you change data/model)
+## 6.4 Train from scratch (Way 2)
 
 ```bash
-# 1. Preprocess (CSVs → parquet). Thresholds come from default.yaml.
-python src/netjepa/scripts/preprocess_kaggle.py
+# 1. Get the raw 5G data → parquet. Fetch from Kaggle automatically …
+python src/netjepa/scripts/fetch_assets.py --data-only
+#    … or, if you already have the raw 5G CSVs locally:
+#    python src/netjepa/scripts/preprocess_kaggle.py --raw_dir <path-to-5G_Traffic_Datasets>
 
 # 2. Phase 1 — self-supervised pretraining (~15–25 min on GPU)
 python src/netjepa/scripts/train_phase1.py  --device cuda

@@ -73,6 +73,9 @@ KNN_PATH     = _resolve(KNN_PATH) if KNN_PATH else ''
 PCAP_PATH    = os.environ.get('PCAP_PATH', '')
 PCAP_PATH    = _resolve(PCAP_PATH) if PCAP_PATH else ''
 REPLAY_SPEED = float(os.environ.get('REPLAY_SPEED', '1.0'))
+# Published HF model repo to auto-download weights from if they're missing locally
+# (lets a bare clone serve the live demo). Set to '' to disable the fallback.
+NETJEPA_HF_REPO = os.environ.get('NETJEPA_HF_REPO', 'kritikahd007/net-jepa')
 
 WEBUI_DATA   = PROJECT_ROOT / 'webui' / 'public' / 'data'
 DATASET_DIR  = WEBUI_DATA / DATASET_ID
@@ -144,11 +147,37 @@ def _append_jsonl(path: Path, record: dict) -> None:
         f.write(json.dumps(record) + '\n')
 
 
+def _maybe_fetch_weights() -> None:
+    """If the checkpoint / k-NN are missing locally, download them from the
+    published Hugging Face model repo (NETJEPA_HF_REPO) so a bare clone can serve
+    the live demo. Best-effort — any failure is surfaced later via /api/health."""
+    global KNN_PATH
+    if not NETJEPA_HF_REPO:
+        return
+    ckpt = Path(NETJEPA_CKPT)
+    knn = Path(KNN_PATH) if KNN_PATH else (ckpt.parent / 'knn.joblib')
+    if ckpt.is_file() and knn.is_file():
+        return
+    try:
+        from huggingface_hub import hf_hub_download
+    except ImportError:
+        return  # huggingface_hub not installed → leave it to the FileNotFoundError below
+    import shutil
+    ckpt.parent.mkdir(parents=True, exist_ok=True)
+    if not ckpt.is_file():
+        print(f'[net-jepa] weights missing locally → fetching from HF {NETJEPA_HF_REPO} …')
+        shutil.copy(hf_hub_download(NETJEPA_HF_REPO, 'net_jepa_phase3.pt'), ckpt)
+    if not knn.is_file():
+        shutil.copy(hf_hub_download(NETJEPA_HF_REPO, 'knn.joblib'), knn)
+        KNN_PATH = str(knn)
+
+
 def _load_runtime() -> None:
     """Load model + reducer + reference cloud/metrics. Records any error in
     _state['load_error'] rather than raising, so the server still boots and can
     report the problem over /api/health."""
     try:
+        _maybe_fetch_weights()
         if not Path(NETJEPA_CKPT).is_file():
             raise FileNotFoundError(f'checkpoint not found: {NETJEPA_CKPT}')
         if not UMAP_PATH.is_file():
