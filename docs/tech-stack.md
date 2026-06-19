@@ -49,11 +49,11 @@ JetBrains Mono (Google Fonts).
 
 - **Models used:** none pre-trained / no foundation model. Net-JEPA is trained from scratch
   on the datasets in [datasets.md](datasets.md). No closed-weight models are used anywhere.
-- **Models published:** the trained Net-JEPA model (Phase-3 checkpoint + fitted cosine k-NN) is
-  packaged for **Hugging Face** under **Apache-2.0** — model card in
-  [`hf_model_card.md`](hf_model_card.md), one-command uploader at
-  `src/netjepa/scripts/publish_hf.py` (`HF_TOKEN=… python src/netjepa/scripts/publish_hf.py
-  --repo-id <user>/net-jepa`). HF link goes in the README once published. Checkpoints are
+- **Models published:** **[`kritikahd007/net-jepa`](https://huggingface.co/kritikahd007/net-jepa)**
+  on Hugging Face under **Apache-2.0** — the full trained model (Phase-3 checkpoint, ~1.76M params)
+  + fitted cosine k-NN + config + model card ([`hf_model_card.md`](hf_model_card.md)). Re-publishable
+  via `src/netjepa/scripts/publish_hf.py` (`HF_TOKEN=… python src/netjepa/scripts/publish_hf.py
+  --repo-id <user>/net-jepa`; add `--with-umap` to also ship the 2-D atlas reducer). Checkpoints are
   gitignored due to size and remain reproducible end-to-end from the scripts.
 
 ## 4.5 Why this stack

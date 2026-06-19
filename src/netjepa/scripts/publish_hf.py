@@ -48,6 +48,10 @@ def main() -> None:
                     help="Config to publish as config.yaml (default: %(default)s)")
     ap.add_argument("--card", default="docs/hf_model_card.md",
                     help="Model card → uploaded as README.md (default: %(default)s)")
+    ap.add_argument("--umap", default="webui/public/data/phase3b_supcon/umap.joblib",
+                    help="UMAP reducer for the 2-D atlas (uploaded only with --with-umap)")
+    ap.add_argument("--with-umap", action="store_true",
+                    help="Also upload the UMAP reducer (umap.joblib) for atlas-projection reproducibility")
     ap.add_argument("--private", action="store_true",
                     help="Create the repo as private (default: public)")
     args = ap.parse_args()
@@ -70,6 +74,8 @@ def main() -> None:
         (_resolve(args.knn),        "knn.joblib"),
         (_resolve(args.config),     "config.yaml"),
     ]
+    if args.with_umap:
+        uploads.append((_resolve(args.umap), "umap.joblib"))
     missing = [str(src) for src, _ in uploads if not src.is_file()]
     if missing:
         sys.exit("Missing files (train/export first, or pass correct paths):\n  - "

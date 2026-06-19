@@ -30,6 +30,7 @@ trained **from scratch** (no foundation / pre-trained / closed-weight model is u
 | `net_jepa_phase3.pt` | Trained Net-JEPA checkpoint (Phase 3, epoch 50) — encoder + fusion + downstream embedding head, with α-centering baked in |
 | `knn.joblib` | Fitted cosine **k-NN (k=5)** category classifier over the labelled embeddings |
 | `config.yaml` | The exact `default.yaml` hyper-parameters used to build the model |
+| `umap.joblib` | *(optional)* Fitted UMAP reducer (128-D → 2-D) for placing flows in the Signal Atlas visualization — **not needed for classification** |
 
 The checkpoint produces a **128-D L2-normalised embedding** per flow; the k-NN reads that
 embedding to predict one of 6 categories.

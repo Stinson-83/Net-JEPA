@@ -29,13 +29,14 @@
   `python src/netjepa/scripts/<script>.py`. Install/run steps: [docs/usage.md](docs/usage.md).
 - **Models Used** - **None** (no pre-trained / foundation / closed-weight models). Net-JEPA is
   trained **from scratch** on the datasets below. See [docs/tech-stack.md §4.4](docs/tech-stack.md).
-- **Models Published** - The trained Net-JEPA model (Phase-3 checkpoint + fitted cosine k-NN) is
-  **publishable to Hugging Face with one command** — model card in
-  [`docs/hf_model_card.md`](docs/hf_model_card.md), uploader in
-  [`src/netjepa/scripts/publish_hf.py`](src/netjepa/scripts/publish_hf.py):
-  `HF_TOKEN=… python src/netjepa/scripts/publish_hf.py --repo-id <user>/net-jepa` (Apache-2.0).
-  **Hugging Face link:** _‹paste here once published›_. The checkpoint is also fully reproducible
-  end-to-end from the scripts (gitignored due to size).
+- **Models Published** - **Hugging Face:
+  [`kritikahd007/net-jepa`](https://huggingface.co/kritikahd007/net-jepa)** (**Apache-2.0**) — the
+  full trained Net-JEPA model (Phase-3 checkpoint `net_jepa_phase3.pt`, ~1.76M params: encoder +
+  fusion + predictor + EMA target + pooling + embedding head + α-centering) plus the fitted cosine
+  k-NN (`knn.joblib`), config, and model card ([`docs/hf_model_card.md`](docs/hf_model_card.md)).
+  Re-publishable from [`src/netjepa/scripts/publish_hf.py`](src/netjepa/scripts/publish_hf.py)
+  (`HF_TOKEN=… python src/netjepa/scripts/publish_hf.py --repo-id <user>/net-jepa`); checkpoint is
+  also reproducible end-to-end from the training scripts.
 - **Datasets Used** -
   - [Kaggle · 5G Traffic Datasets](https://www.kaggle.com/datasets/kimdaegyeom/5g-traffic-datasets) (`kimdaegyeom/5g-traffic-datasets`) — primary training/test set.
   - [Zenodo · VLC / Valencia Flow-Based Traffic Classification](https://zenodo.org/records/15121418) — **CC-BY-4.0** (MS Teams supervised; Netflix/Prime/YouTube/Roblox pretrain-only).
