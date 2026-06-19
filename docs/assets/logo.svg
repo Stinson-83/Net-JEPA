@@ -1,20 +1,57 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="560" height="150" viewBox="0 0 560 150" fill="none">
-  <g transform="translate(6,9) scale(1.3200)">
-    
-  <!-- left facet (light) -->
-  <path d="M 50 14 L 16 86 L 50 86 Z"
-        fill="#4E7C99" stroke-linejoin="round"/>
-  <!-- right facet (shadow) -->
-  <path d="M 50 14 L 50 86 L 84 86 Z"
-        fill="#37596F" stroke-linejoin="round"/>
-  <!-- detached node shard -->
-  <path d="M 6 86 L 22 86 L 14 64 Z" fill="#4E7C99" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1600" height="440" viewBox="0 0 1600 440" fill="none">
 
-  </g>
-  <text x="158" y="74"
-        font-family="'Helvetica Neue',Arial,'DejaVu Sans',sans-serif"
-        font-size="52" font-weight="700" letter-spacing="-1" fill="#3D5E72">Net-JEPA</text>
-  <text x="160" y="104"
-        font-family="'Helvetica Neue',Arial,'DejaVu Sans',sans-serif"
-        font-size="18" font-weight="500" letter-spacing="0.5" fill="#8A9AA6">The shape of encrypted traffic</text>
+  <defs>
+    <linearGradient id="jgrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#F9A87A"/>
+      <stop offset="30%"  stop-color="#E05FA0"/>
+      <stop offset="70%"  stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#22D3EE"/>
+    </linearGradient>
+    <linearGradient id="wifigrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#93C5FD"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ═══ N — black body + orange inner slash ═══ -->
+  <rect x="28"  y="60" width="68" height="310" rx="5" fill="#111"/>
+  <rect x="236" y="60" width="68" height="310" rx="5" fill="#111"/>
+  <polygon points="28,60 96,60 304,340 304,370 236,370 28,90" fill="#111"/>
+  <!-- orange accent diagonal inside N -->
+  <polygon points="96,60 166,60 304,248 304,310 236,310 96,122" fill="#F5A623"/>
+
+  <!-- ═══ ET — bold text ═══ -->
+  <text x="334" y="372"
+        font-family="'Arial Black','Impact','Helvetica Neue',sans-serif"
+        font-size="322" font-weight="900" fill="#111" letter-spacing="-10">ET</text>
+
+  <!-- ═══ J — gradient body (thick, full height) ═══ -->
+  <path d="M 755 185 L 848 185 L 848 302
+           Q 848 428 710 428
+           Q 572 428 540 315
+           L 598 296
+           Q 614 388 710 388
+           Q 795 388 795 302
+           L 795 185 Z"
+        fill="url(#jgrad)"/>
+
+  <!-- WiFi symbol centred on top of J at (800, 185) opening upward -->
+  <!-- WiFi dot -->
+  <circle cx="800" cy="178" r="14" fill="#2563EB"/>
+  <!-- arc 1 — inner, r=36 -->
+  <path d="M 764 155 A 36 36 0 0 1 836 155"
+        stroke="#3B82F6" stroke-width="17" stroke-linecap="round" fill="none"/>
+  <!-- arc 2 — mid, r=62 -->
+  <path d="M 738 128 A 62 62 0 0 1 862 128"
+        stroke="#60A5FA" stroke-width="15" stroke-linecap="round" fill="none"/>
+  <!-- arc 3 — outer, r=88 -->
+  <path d="M 712 101 A 88 88 0 0 1 888 101"
+        stroke="#93C5FD" stroke-width="13" stroke-linecap="round" fill="none"/>
+
+  <!-- ═══ EPA — bold text ═══ -->
+  <text x="900" y="372"
+        font-family="'Arial Black','Impact','Helvetica Neue',sans-serif"
+        font-size="322" font-weight="900" fill="#111" letter-spacing="-10">EPA</text>
+
 </svg>
