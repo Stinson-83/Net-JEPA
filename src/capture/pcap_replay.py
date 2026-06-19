@@ -74,11 +74,31 @@ class PcapReplay(PacketSource):
                     continue
 
                 transport = tcp if tcp is not None else udp
-                proto = "TCP" if tcp is not None else "UDP"
                 src_ip = str(layer.src)
                 dst_ip = str(layer.dst)
                 src_port = int(transport.sport)
                 dst_port = int(transport.dport)
+
+                # TCP flags + TLS handshake markers (so the full-fidelity feature
+                # path can recover syn/fin/rst ratios + handshake RTT). UDP/443 is
+                # bucketed as QUIC to match the training parser's protocol map.
+                is_syn = is_ack = is_syn_ack = is_fin = is_rst = False
+                is_client_hello = is_server_hello = False
+                if tcp is not None:
+                    proto = "TCP"
+                    f = tcp.flags
+                    has_s, has_a = ('S' in f), ('A' in f)
+                    is_syn     = has_s and not has_a
+                    is_syn_ack = has_s and has_a
+                    is_ack     = has_a and not has_s
+                    is_fin     = 'F' in f
+                    is_rst     = 'R' in f
+                    payload = bytes(tcp.payload)
+                    if len(payload) >= 6 and payload[0] == 0x16:   # TLS handshake record
+                        if payload[5] == 0x01:   is_client_hello = True
+                        elif payload[5] == 0x02: is_server_hello = True
+                else:
+                    proto = "QUIC" if 443 in (src_port, dst_port) else "UDP"
 
                 pkt_ts = float(pkt.time)
                 size = len(pkt)
@@ -108,4 +128,11 @@ class PcapReplay(PacketSource):
                     proto=proto,
                     size=size,
                     direction=direction,
+                    is_syn=is_syn,
+                    is_ack=is_ack,
+                    is_syn_ack=is_syn_ack,
+                    is_fin=is_fin,
+                    is_rst=is_rst,
+                    is_client_hello=is_client_hello,
+                    is_server_hello=is_server_hello,
                 )

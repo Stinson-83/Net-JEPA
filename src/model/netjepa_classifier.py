@@ -19,17 +19,31 @@ from model.classifier_base import Classifier, Prediction
 # Lazy import to avoid circular import at module load
 _NetJEPA = None
 _load_checkpoint = None
+_compute_packet_sequence = None
+_compute_flow_context = None
+_compute_src_host_stats = None
+_extract_rtt = None
 
 
 def _lazy_imports():
     global _NetJEPA, _load_checkpoint
+    global _compute_packet_sequence, _compute_flow_context, _compute_src_host_stats, _extract_rtt
     if _NetJEPA is None:
         import sys
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
         from netjepa.model.netjepa import NetJEPA
         from netjepa.utils.io import load_checkpoint
+        # Reuse the EXACT training feature extractor + RTT logic so live
+        # inference is full-fidelity (not a simplified reimplementation).
+        from netjepa.data.features import (
+            compute_packet_sequence, compute_flow_context, compute_src_host_stats)
+        from netjepa.data.rtt import extract_rtt
         _NetJEPA = NetJEPA
         _load_checkpoint = load_checkpoint
+        _compute_packet_sequence = compute_packet_sequence
+        _compute_flow_context = compute_flow_context
+        _compute_src_host_stats = compute_src_host_stats
+        _extract_rtt = extract_rtt
 
 
 # ── App / category label maps (must match netjepa/data/preprocess.py) ────────
@@ -58,97 +72,56 @@ MAX_PACKETS = 64
 PACKET_FEAT_DIM = 9
 CONTEXT_DIM = 15
 
-_PROTO_MAP = {'TCP': 0, 'TLS': 0, 'UDP': 1, 'QUIC': 2}
+_PROTO_ID = {'TCP': 0, 'TLS': 0, 'UDP': 1, 'QUIC': 2}
 
 
-def _proto_onehot(proto: str) -> list[float]:
-    oh = [0.0, 0.0, 0.0, 0.0]
-    oh[_PROTO_MAP.get(proto.upper(), 3)] = 1.0
-    return oh
-
-
-def _extract_rtt_live(packets: List[PacketRecord], client_ip: str) -> tuple[float, bool]:
-    """First-exchange RTT estimate from PacketRecord stream."""
-    first_client_t = None
+def _records_to_dicts(packets: List[PacketRecord]) -> list[dict]:
+    """PacketRecord → the packet-dict schema the training extractor expects
+    (the netjepa/data/parser.py output), so live inference can reuse features.py
+    verbatim instead of a simplified reimplementation."""
+    out = []
     for p in packets:
-        if p.src_ip == client_ip:
-            first_client_t = p.ts
-            break
-    if first_client_t is None:
-        return 0.0, False
-    for p in packets:
-        if p.src_ip != client_ip and p.ts > first_client_t:
-            rtt = p.ts - first_client_t
-            if 0.0 < rtt < 5.0:
-                return rtt, True
-    return 0.0, False
+        out.append({
+            'time': p.ts, 'src_ip': p.src_ip, 'dst_ip': p.dst_ip,
+            'src_port': p.src_port, 'dst_port': p.dst_port,
+            'protocol_id': _PROTO_ID.get(p.proto.upper(), 3),
+            'length': p.size,
+            'is_syn': p.is_syn, 'is_ack': p.is_ack, 'is_syn_ack': p.is_syn_ack,
+            'is_fin': p.is_fin, 'is_rst': p.is_rst,
+            'is_client_hello': p.is_client_hello, 'is_server_hello': p.is_server_hello,
+        })
+    return out
+
+
+def _identify_client(dicts: list[dict]) -> str:
+    """Same rule as netjepa/data/flow_builder._identify_client."""
+    for p in dicts:
+        if p['is_syn'] and not p['is_syn_ack']:
+            return p['src_ip']
+    return dicts[0]['src_ip']
 
 
 def packets_to_tensors(packets: List[PacketRecord]
                        ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Convert List[PacketRecord] → (packet_seq, flow_ctx, padding_mask) tensors."""
-    n = min(len(packets), MAX_PACKETS)
-    pkts = packets[:n]
+    """Convert List[PacketRecord] → (packet_seq, flow_ctx, padding_mask) tensors
+    using the **exact training feature extractor** — full fidelity: TCP-flag
+    ratios, handshake-based RTT, and per-host connectivity stats (recovered from
+    the pcap), so a live flow embeds identically to how it would in training."""
+    _lazy_imports()
+    dicts = _records_to_dicts(packets[:MAX_PACKETS])
+    client_ip = _identify_client(dicts)
 
-    # Identify client (source of first packet)
-    client_ip = pkts[0].src_ip
+    rtt, rtt_valid = _extract_rtt(dicts, client_ip)
+    # Host-connectivity stats over this flow (a single uploaded flow yields the
+    # same per-flow counts training computes for a one-flow client).
+    host_stats = _compute_src_host_stats([{'client_ip': client_ip, 'packets': dicts}])
 
-    rtt, rtt_valid = _extract_rtt_live(pkts, client_ip)
-    rtt_norm  = min(rtt, 2.0) / 2.0
-    rtt_flag  = 1.0 if rtt_valid else 0.0
+    feat, mask = _compute_packet_sequence(dicts, client_ip, rtt, rtt_valid, MAX_PACKETS)
+    ctx        = _compute_flow_context(dicts, client_ip, rtt, rtt_valid, host_stats)
 
-    seq = []
-    prev_t = None
-    for p in pkts:
-        t   = p.ts
-        iat = (t - prev_t) if prev_t is not None else 0.0
-        prev_t = t
-        size_norm = p.size / 1500.0
-        iat_log   = math.log1p(max(iat, 0.0)) / 10.0
-        direction = 1.0 if p.src_ip == client_ip else -1.0
-        signed    = size_norm * direction
-        oh        = _proto_onehot(p.proto)
-        seq.append([size_norm, iat_log, signed] + oh + [rtt_norm, rtt_flag])
-
-    feat = np.array(seq, dtype=np.float32)
-    mask = np.ones(n, dtype=bool)
-    if n < MAX_PACKETS:
-        pad  = np.zeros((MAX_PACKETS - n, PACKET_FEAT_DIM), dtype=np.float32)
-        feat = np.vstack([feat, pad])
-        mask = np.concatenate([mask, np.zeros(MAX_PACKETS - n, dtype=bool)])
-
-    # Flow context (simplified — src-host stats default to 1 flow / 1 unique addr)
-    all_times = [p.ts for p in packets]
-    all_pkts  = packets  # use ALL packets for context stats
-    total_n   = len(all_pkts)
-    t0, t1    = all_times[0], all_times[-1]
-    duration  = max(t1 - t0, 1e-9)
-    iats_all  = [all_times[i] - all_times[i-1] for i in range(1, total_n)]
-    iat_mean  = float(np.mean(iats_all)) if iats_all else 0.0
-    iat_std   = float(np.std(iats_all))  if len(iats_all) > 1 else 0.0
-    proto_id  = _PROTO_MAP.get(packets[0].proto.upper(), 3)
-
-    ctx = np.array([
-        proto_id / 3.0,
-        math.log1p(duration) / 10.0,
-        math.log1p(iat_mean) / 10.0,
-        math.log1p(iat_std)  / 10.0,
-        0.0,  # syn_count (not available from PacketRecord)
-        0.0,  # fin_count
-        0.0,  # rst_count
-        math.log1p(total_n / duration) / 10.0,
-        math.log1p(1) / 10.0,  # n_dst_ips (1 default)
-        math.log1p(1) / 10.0,  # n_dst_ports
-        math.log1p(1) / 10.0,  # n_src_ports
-        math.log1p(1 / duration) / 10.0,  # conn_per_sec (1 flow)
-        min(total_n, 200) / 200.0,
-        rtt_norm,
-        rtt_flag,
-    ], dtype=np.float32)
-
-    pkt_t  = torch.from_numpy(feat).unsqueeze(0)   # (1, 64, 9)
-    ctx_t  = torch.from_numpy(ctx).unsqueeze(0)    # (1, 15)
-    mask_t = torch.from_numpy(mask).unsqueeze(0)   # (1, 64)
+    pkt_t  = torch.from_numpy(np.asarray(feat, dtype=np.float32)).unsqueeze(0)  # (1, 64, 9)
+    ctx_t  = torch.from_numpy(np.asarray(ctx,  dtype=np.float32)).unsqueeze(0)  # (1, 15)
+    mask_t = torch.from_numpy(np.asarray(mask)).unsqueeze(0)                    # (1, 64)
     return pkt_t, ctx_t, mask_t
 
 

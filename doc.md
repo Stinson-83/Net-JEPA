@@ -437,6 +437,14 @@ The front-end reads a **static export** when the server is down and the **live
 server** when it's up. Full feature tour: `docs/features.md`. (A minimal legacy
 dashboard under `src/server/static/` is retained as a serverless fallback.)
 
+**Full-fidelity live features.** `packets_to_tensors()` doesn't reimplement the
+feature math — it reuses the **exact training extractor** (`netjepa/data/features.py`
++ `rtt.py`). `capture/pcap_replay.py` parses TCP flags (SYN/ACK/FIN/RST) and TLS
+Client/Server-Hello markers out of each packet, so the live flow gets the same
+9-D packet tokens **and** the same 15-D context (syn/fin/rst ratios, handshake
+RTT, per-host stats) it would in training — an uploaded flow embeds identically
+to a training flow, no zeroed/defaulted dims.
+
 **Environment variables:**
 
 | Variable | Default | Description |
