@@ -17,7 +17,9 @@ pip install -e .                  # register the src/ packages (netjepa, server,
 cd webui && npm install && cd ..  # front-end deps
 ```
 
-(All three are wrapped as **`make install`**.)
+**You normally don't run these by hand** — every `make` target (e.g. `make demo`, `make reproduce`)
+installs automatically on first run and caches it. The commands above are just the manual equivalent
+of `make install`.
 
 All Python source lives under `src/` (see [architecture.md §2.6](architecture.md)). `pip install -e .`
 makes `netjepa`, `server`, etc. importable from any directory. You can skip it if you prefer — the
@@ -69,7 +71,9 @@ uvicorn server.app:app --host 0.0.0.0 --port 8000
 cd webui && npm run dev          # → http://localhost:5173
 ```
 
-Shortcuts: **`make serve`** (Terminal A) and **`make webui`** (Terminal B).
+**One command instead:** `make demo` — installs (first run), starts the server (weights auto-download
+from Hugging Face), waits for it, then opens the UI. `make stop` stops the server afterwards. (Two
+terminals if you prefer: `make serve` + `make webui`.)
 
 Open the printed URL. The UI auto-detects the server ("LIVE MODEL" lights up) and also
 works **fully offline** off the committed static export.
@@ -172,11 +176,9 @@ URL into the top-level README ("Models Published") and [tech-stack.md §4.4](tec
 
 ## 6.7 Command cheat-sheet — 5 common use cases
 
-**One-time setup** (needed for all of them):
-
-```bash
-pip install -r requirements.txt && pip install -e .     # or: make install   (also installs webui deps)
-```
+**No manual setup needed** — every `make` target below installs dependencies automatically on first
+run (and caches it). The non-`make` variants assume you've run `make install` once (or
+`pip install -r requirements.txt && pip install -e .`).
 
 Use `--device cpu` instead of `cuda` if you have no GPU (training is slower but works;
 evaluation/inference are fine on CPU). `make help` lists every shortcut.
@@ -228,12 +230,13 @@ python src/netjepa/scripts/evaluate.py --checkpoint checkpoints/phase3/final.pt 
 `--raw_dir` points at your folder containing `GeForce_Now/`, `MS_Teams/`, … (defaults to the
 path in `default.yaml` if omitted).
 
-### 5 · Run the frontend / UI
+### 5 · Run the frontend / UI (one command)
 
 ```bash
-make webui            # = cd webui && npm run dev   → http://localhost:5173
-# optional, for live inference in another terminal:
-make serve
+make demo             # install (first run) → start server (weights auto-download from HF) → open the UI
+#   Ctrl-C stops the UI; then `make stop` stops the server.
 ```
-The UI auto-detects the server ("LIVE MODEL") and also works **fully offline** off the
-committed static export if the server isn't running.
+That's the whole live experience: upload a `.pcap` in the UI and the **real model** classifies it —
+the server fetches the weights from Hugging Face automatically, and **no dataset is needed** (the
+galaxy runs off the committed embeddings). Prefer two terminals? `make serve` + `make webui`. The UI
+also works **fully offline** off the committed static export if no server is running.

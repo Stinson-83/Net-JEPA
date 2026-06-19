@@ -1,10 +1,10 @@
-# Net-JEPA — reproducibility & demo shortcuts.  Run `make` (or `make help`) to list targets.
+# Net-JEPA — just clone the repo and run these.  `make help` lists everything.
 #
-# One-command reproduction (the KPI video):   make reproduce
-# Live demo (two terminals):                   make serve   |   make webui
-# Train from scratch (GPU recommended):        make fetch && make train DEVICE=cuda
+#   See it work (UI + live model):   make demo        weights auto-download from Hugging Face
+#   Reproduce the KPIs:              make reproduce   installs, fetches weights+data, evaluates
 #
-# Override vars on the CLI, e.g.:  make train DEVICE=cuda   |   make fetch-foldins FOLDIN_APPS=teams,netflix
+# Install happens automatically the first time (cached afterwards). Override vars on the CLI, e.g.
+#   make demo PORT=8080   |   make train DEVICE=cuda   |   make fetch-foldins FOLDIN_APPS=teams,netflix
 PY          ?= python3
 DEVICE      ?= cpu
 CKPT        ?= checkpoints/phase3/final.pt
@@ -15,60 +15,65 @@ PORT        ?= 8000
 SCRIPTS := src/netjepa/scripts
 
 .DEFAULT_GOAL := help
-.PHONY: help install install-py install-web fetch fetch-weights fetch-foldins \
-        reproduce evaluate serve webui train export clean clean-assets
+.PHONY: help install demo stop reproduce serve webui \
+        fetch fetch-weights fetch-data fetch-foldins evaluate train export clean clean-assets
 
 help: ## Show this help
-	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
-	  awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+	@awk 'BEGIN{FS=":.*## "} \
+	     /^##@/{printf "\n\033[1m%s\033[0m\n", substr($$0,5)} \
+	     /^[a-zA-Z_-]+:.*## /{printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-# ── setup ──────────────────────────────────────────────────────────────────
-install: install-py install-web ## Install Python (editable) + web deps
-
-install-py: ## Install Python deps and the src/ package (pip install -e .)
-	$(PY) -m pip install -r requirements.txt
-	$(PY) -m pip install -e .
-
-install-web: ## Install the webui (npm) deps
-	cd webui && npm install
-
-# ── fetch assets (weights from HF, data from source) ───────────────────────
-fetch: ## Download weights (HF) + build 5G-base data (Kaggle -> preprocess)
-	$(PY) $(SCRIPTS)/fetch_assets.py
-
-fetch-weights: ## Download only the pretrained weights from Hugging Face (no Kaggle needed)
-	$(PY) $(SCRIPTS)/fetch_assets.py --weights-only
-
-fetch-foldins: ## Add VLC/cloud-gaming fold-ins to the data (FOLDIN_APPS=teams default; LARGE)
-	$(PY) $(SCRIPTS)/fetch_assets.py --data-only --with-foldins --foldin-apps $(FOLDIN_APPS)
-
-# ── reproduce / run ────────────────────────────────────────────────────────
-reproduce: install fetch evaluate ## One-shot: install -> fetch (weights+data) -> reproduce KPIs
-
-evaluate: ## Evaluate the checkpoint and print the KPI summary (vars: CKPT, DEVICE)
-	$(PY) $(SCRIPTS)/evaluate.py --checkpoint $(CKPT) --device $(DEVICE)
-
-serve: ## Run the live inference server (auto-fetches weights from HF if missing)
-	$(PY) -m uvicorn server.app:app --app-dir src --host 0.0.0.0 --port $(PORT)
-
-webui: ## Run the Signal Atlas web UI (Vite dev server, http://localhost:5173)
+##@ Quick start (clone + run)
+demo: install ## Run the live demo: inference server (weights auto-download from HF) + Signal Atlas UI
+	@echo "→ starting inference server on :$(PORT) — first run downloads the model from Hugging Face…"
+	@$(PY) -m uvicorn server.app:app --app-dir src --host 0.0.0.0 --port $(PORT) > netjepa-server.log 2>&1 & echo $$! > .netjepa-server.pid
+	@printf "→ waiting for the model to load"; until curl -s --max-time 3 http://localhost:$(PORT)/api/health >/dev/null 2>&1; do printf "."; sleep 1; done; echo " ready (server logs: netjepa-server.log)"
+	@echo "→ launching the Signal Atlas UI — Ctrl-C stops the UI, then run 'make stop' to stop the server"
 	cd webui && npm run dev
 
-# ── train from scratch (run `make fetch` first; DEVICE=cuda recommended) ────
-train: ## Full pipeline: phase1 -> phase2b -> phase3 -> evaluate (needs data; DEVICE=cuda)
+stop: ## Stop the inference server started by 'make demo'
+	@kill `cat .netjepa-server.pid 2>/dev/null` 2>/dev/null && echo "server stopped" || echo "(no server running)"; rm -f .netjepa-server.pid
+
+reproduce: install fetch evaluate ## Reproduce the KPIs: install -> fetch weights+data -> evaluate
+
+install: .make-installed ## Install Python + web dependencies (auto, cached)
+.make-installed: requirements.txt setup.py webui/package.json
+	$(PY) -m pip install -r requirements.txt
+	$(PY) -m pip install -e .
+	cd webui && npm install
+	@touch .make-installed
+
+##@ Fetch assets (weights from Hugging Face, data from Kaggle)
+fetch-weights: install ## Weights ONLY, from Hugging Face (no token, no Kaggle account needed)
+	$(PY) $(SCRIPTS)/fetch_assets.py --weights-only
+fetch-data: install ## Data ONLY, from Kaggle -> preprocess (needs a free Kaggle API token)
+	$(PY) $(SCRIPTS)/fetch_assets.py --data-only
+fetch: install ## BOTH weights (HF) + data (Kaggle -> preprocess)
+	$(PY) $(SCRIPTS)/fetch_assets.py
+fetch-foldins: install ## Data + VLC/cloud-gaming fold-ins for the exact published config (FOLDIN_APPS=teams; LARGE)
+	$(PY) $(SCRIPTS)/fetch_assets.py --data-only --with-foldins --foldin-apps $(FOLDIN_APPS)
+
+##@ Run the pipeline (terminal)
+evaluate: install ## Evaluate the checkpoint and print the KPI summary (vars: CKPT, DEVICE)
+	$(PY) $(SCRIPTS)/evaluate.py --checkpoint $(CKPT) --device $(DEVICE)
+train: install ## Train from scratch: phase1 -> phase2b -> phase3 -> evaluate (run 'make fetch-data' first; DEVICE=cuda)
 	$(PY) $(SCRIPTS)/train_phase1.py  --device $(DEVICE)
 	$(PY) $(SCRIPTS)/train_phase2b.py --device $(DEVICE)
 	$(PY) $(SCRIPTS)/train_phase3.py  --device $(DEVICE)
 	$(PY) $(SCRIPTS)/evaluate.py --checkpoint $(CKPT) --device $(DEVICE)
-
-export: ## Export atlas artifacts + galaxy cloud for the web UI
+export: install ## Re-export atlas artifacts + galaxy cloud for the UI
 	$(PY) $(SCRIPTS)/export_artifacts.py --checkpoint $(CKPT) --dataset-id $(DATASET_ID) --name "Phase 3b" --device $(DEVICE)
 	$(PY) $(SCRIPTS)/export_cloud.py     --checkpoint $(CKPT) --dataset-id $(DATASET_ID) --cap 1500 --device $(DEVICE)
 
-# ── cleanup ────────────────────────────────────────────────────────────────
-clean: ## Remove __pycache__, egg-info, and eval outputs (keeps fetched weights/data)
-	find . -path ./webui/node_modules -prune -o -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
-	rm -rf eval_results eval_results_check src/*.egg-info *.egg-info
+##@ Run UI / server separately (two terminals)
+serve: install ## Inference server only (auto-downloads weights from HF if missing)
+	$(PY) -m uvicorn server.app:app --app-dir src --host 0.0.0.0 --port $(PORT)
+webui: install ## Signal Atlas UI only (Vite dev server -> http://localhost:5173)
+	cd webui && npm run dev
 
+##@ Utilities
+clean: ## Remove caches, eval outputs, server logs (keeps fetched weights/data + installed deps)
+	find . -path ./webui/node_modules -prune -o -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
+	rm -rf eval_results src/*.egg-info *.egg-info netjepa-server.log .netjepa-server.pid
 clean-assets: ## Also delete fetched weights + processed data (forces a clean re-fetch)
 	rm -rf data/processed checkpoints/phase3/final.pt checkpoints/phase3/knn.joblib

@@ -27,8 +27,10 @@
   Atlas" React/WebGL app, with its own `webui/src/`). The package is installable with
   `pip install -e .`; the training/eval scripts also self-bootstrap, so they run directly with
   `python src/netjepa/scripts/<script>.py`. Install/run steps: [docs/usage.md](docs/usage.md).
-  **Quickstart:** `make reproduce` (install → fetch weights+data from HF/Kaggle → reproduce the
-  KPIs); `make serve` + `make webui` for the live demo; `make help` lists every target.
+  **Quickstart (just clone + run):** `make demo` launches the live app — the Signal Atlas UI plus
+  real-model `.pcap` classification, with the weights **auto-downloaded from Hugging Face** and no
+  dataset required (the galaxy runs off committed embeddings). `make reproduce` reproduces the KPIs;
+  `make help` lists every target. Installation happens automatically on first run.
 - **Models Used** - **None** (no pre-trained / foundation / closed-weight models). Net-JEPA is
   trained **from scratch** on the datasets below. See [docs/tech-stack.md §4.4](docs/tech-stack.md).
 - **Models Published** - **Hugging Face:

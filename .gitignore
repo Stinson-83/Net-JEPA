@@ -23,6 +23,11 @@ build/
 # server-side live inference store (grows at runtime, not a source artifact)
 src/server/data/
 
+# Makefile runtime artifacts (install sentinel, demo server pid/log)
+.make-installed
+.netjepa-server.pid
+netjepa-server.log
+
 # Claude Code runtime/session artifacts (locks, etc.)
 .claude/
 eval_da_baseline/
