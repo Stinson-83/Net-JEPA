@@ -437,6 +437,15 @@ The front-end reads a **static export** when the server is down and the **live
 server** when it's up. Full feature tour: `docs/features.md`. (A minimal legacy
 dashboard under `src/server/static/` is retained as a serverless fallback.)
 
+**Connecting the UI ↔ server (single port).** The webui calls the API at the
+**same origin** (relative `/api` + `/ws`); the Vite dev server proxies those to
+the inference server (`vite.config.ts`, target `VITE_PROXY_TARGET`, default
+`:8000`). So only the **UI port (5173)** needs to be reachable — one SSH tunnel
+suffices, no separate `:8000` forward. On first run the server **auto-downloads
+the weights from Hugging Face** (`NETJEPA_HF_REPO`) if the checkpoint is missing,
+so a bare clone serves the live demo. (If the browser can't reach the server, the
+UI silently falls back to the offline static export + mock projector.)
+
 **Full-fidelity live features.** `packets_to_tensors()` doesn't reimplement the
 feature math — it reuses the **exact training extractor** (`netjepa/data/features.py`
 + `rtt.py`). `capture/pcap_replay.py` parses TCP flags (SYN/ACK/FIN/RST) and TLS
@@ -454,6 +463,9 @@ to a training flow, no zeroed/defaulted dims.
 | `KNN_PATH` | *(auto-detected)* | `knn.joblib` next to checkpoint |
 | `PCAP_PATH` | *(optional)* | legacy auto-replay on startup; the primary mode is upload → `POST /api/infer` |
 | `REPLAY_SPEED` | `1.0` | Replay speed multiplier |
+| `NETJEPA_HF_REPO` | `kritikahd007/net-jepa` | HF repo the server auto-downloads weights from if the checkpoint is missing (set empty to disable) |
+| `VITE_PROXY_TARGET` (web) | `http://localhost:8000` | inference server the Vite proxy forwards `/api`+`/ws` to; `make demo` sets it to `:$(PORT)` |
+| `VITE_SERVER_URL` (web) | *(same-origin)* | override to call the API at an absolute host instead of via the proxy |
 
 > The primary entry point is `POST /api/infer` (upload a .pcap) with every
 > pipeline stage streamed over `/ws`; `GET /api/cloud` / `/api/metrics` serve

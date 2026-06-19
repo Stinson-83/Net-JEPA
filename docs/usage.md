@@ -172,7 +172,13 @@ URL into the top-level README ("Models Published") and [tech-stack.md §4.4](tec
 | `NETJEPA_CKPT` | `checkpoints/phase3/final.pt` | Trained checkpoint |
 | `DATASET_ID` | `phase3b_supcon` | Export dir under `webui/public/data` (cloud + reducer + metrics) |
 | `KNN_PATH` | auto-detected | `knn.joblib` next to the checkpoint |
-| `VITE_SERVER_URL` (web) | `http://localhost:8000` | Where the UI looks for the server |
+| `NETJEPA_HF_REPO` | `kritikahd007/net-jepa` | HF repo the server auto-downloads weights from if the checkpoint is missing |
+| `VITE_PROXY_TARGET` (web) | `http://localhost:8000` | inference server the Vite proxy forwards `/api`+`/ws` to; `make demo` sets it to `:$(PORT)` |
+| `VITE_SERVER_URL` (web) | *(same-origin)* | override only to call the API at an absolute host instead of via the proxy |
+
+The UI talks to the API at the **same origin** (relative `/api`+`/ws`) and Vite proxies it to the
+server, so for a remote demo you only need to tunnel the **UI port (5173)** — not `:8000`. If `:8000`
+is taken on your host, run `make demo PORT=<free>` (the proxy follows automatically).
 
 ## 6.7 Command cheat-sheet — 5 common use cases
 
