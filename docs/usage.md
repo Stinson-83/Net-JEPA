@@ -6,6 +6,9 @@
 - (Optional) an NVIDIA GPU for faster training — **not** required for inference/serving
 - `tshark` is **not** required (pcap conversion uses scapy)
 
+> **TL;DR (one command):** `make reproduce` → install → fetch weights+data → reproduce the KPIs.
+> `make help` lists every shortcut; the explicit steps below are what each target runs.
+
 ## 6.2 Install
 
 ```bash
@@ -13,6 +16,8 @@ pip install -r requirements.txt   # runtime deps (torch, scapy, fastapi, umap-le
 pip install -e .                  # register the src/ packages (netjepa, server, capture, flows, model)
 cd webui && npm install && cd ..  # front-end deps
 ```
+
+(All three are wrapped as **`make install`**.)
 
 All Python source lives under `src/` (see [architecture.md §2.6](architecture.md)). `pip install -e .`
 makes `netjepa`, `server`, etc. importable from any directory. You can skip it if you prefer — the
@@ -48,6 +53,8 @@ python src/netjepa/scripts/evaluate.py --checkpoint checkpoints/phase3/final.pt
 #   → prints the KPI summary: intra/inter cosine, kNN accuracy, few-shot, latency
 ```
 
+**Or just `make reproduce`** (= `make install fetch evaluate`).
+
 ### Way 2 — from scratch: train everything → see §6.4.
 
 ### Run the live demo (either way)
@@ -62,6 +69,8 @@ uvicorn server.app:app --host 0.0.0.0 --port 8000
 cd webui && npm run dev          # → http://localhost:5173
 ```
 
+Shortcuts: **`make serve`** (Terminal A) and **`make webui`** (Terminal B).
+
 Open the printed URL. The UI auto-detects the server ("LIVE MODEL" lights up) and also
 works **fully offline** off the committed static export.
 
@@ -69,6 +78,8 @@ works **fully offline** off the committed static export.
 (or `model` / `journey`) opens a specific scene; keys `1–4` switch scenes.
 
 ## 6.4 Train from scratch (Way 2)
+
+Shortcut for steps 2–5 below: **`make train DEVICE=cuda`** (run `make fetch` first for the data).
 
 ```bash
 # 1. Get the raw 5G data → parquet. Fetch from Kaggle automatically …

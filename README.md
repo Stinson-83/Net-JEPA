@@ -27,6 +27,8 @@
   Atlas" React/WebGL app, with its own `webui/src/`). The package is installable with
   `pip install -e .`; the training/eval scripts also self-bootstrap, so they run directly with
   `python src/netjepa/scripts/<script>.py`. Install/run steps: [docs/usage.md](docs/usage.md).
+  **Quickstart:** `make reproduce` (install → fetch weights+data from HF/Kaggle → reproduce the
+  KPIs); `make serve` + `make webui` for the live demo; `make help` lists every target.
 - **Models Used** - **None** (no pre-trained / foundation / closed-weight models). Net-JEPA is
   trained **from scratch** on the datasets below. See [docs/tech-stack.md §4.4](docs/tech-stack.md).
 - **Models Published** - **Hugging Face:
