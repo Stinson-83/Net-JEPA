@@ -169,3 +169,71 @@ URL into the top-level README ("Models Published") and [tech-stack.md §4.4](tec
 | `DATASET_ID` | `phase3b_supcon` | Export dir under `webui/public/data` (cloud + reducer + metrics) |
 | `KNN_PATH` | auto-detected | `knn.joblib` next to the checkpoint |
 | `VITE_SERVER_URL` (web) | `http://localhost:8000` | Where the UI looks for the server |
+
+## 6.7 Command cheat-sheet — 5 common use cases
+
+**One-time setup** (needed for all of them):
+
+```bash
+pip install -r requirements.txt && pip install -e .     # or: make install   (also installs webui deps)
+```
+
+Use `--device cpu` instead of `cuda` if you have no GPU (training is slower but works;
+evaluation/inference are fine on CPU). `make help` lists every shortcut.
+
+### 1 · Load weights + data, run the data through the pretrained model, evaluate
+
+```bash
+make reproduce
+# — or explicitly —
+python src/netjepa/scripts/fetch_assets.py                                      # weights (HF) + data (Kaggle→preprocess)
+python src/netjepa/scripts/evaluate.py --checkpoint checkpoints/phase3/final.pt --device cpu
+```
+Add `--with-foldins` to `fetch_assets.py` to match the published checkpoint exactly.
+
+### 2 · Load only the weights, then classify a capture (prediction)
+
+```bash
+python src/netjepa/scripts/fetch_assets.py --weights-only      # just the model, no Kaggle
+make serve                                                     # = uvicorn server.app:app --app-dir src
+# in another shell, predict on a pcap → category + confidence + 2-D coords:
+curl -F "file=@/path/to/your.pcap" http://localhost:8000/api/infer
+```
+Or use the GUI: `make webui` → drag a `.pcap` into the Inject Dock. (`make serve` even
+auto-downloads the weights from HF if you skip the fetch step.)
+
+### 3 · Fetch the data, train from scratch, evaluate
+
+```bash
+python src/netjepa/scripts/fetch_assets.py --data-only         # data from Kaggle (training needs no weights)
+#   add --with-foldins to match the published config exactly
+make train DEVICE=cuda                                         # phase1 → phase2b → phase3 → evaluate
+# — or explicitly —
+python src/netjepa/scripts/train_phase1.py  --device cuda
+python src/netjepa/scripts/train_phase2b.py --device cuda
+python src/netjepa/scripts/train_phase3.py  --device cuda
+python src/netjepa/scripts/evaluate.py --checkpoint checkpoints/phase3/final.pt --device cuda
+```
+The dataset comes from **Kaggle**, not HF — we don't republish it (license "Unknown").
+
+### 4 · No downloads — preprocess local raw data, train from scratch, evaluate
+
+```bash
+python src/netjepa/scripts/preprocess_kaggle.py --raw_dir <path-to-5G_Traffic_Datasets> --out_dir data/processed
+python src/netjepa/scripts/train_phase1.py  --device cuda
+python src/netjepa/scripts/train_phase2b.py --device cuda
+python src/netjepa/scripts/train_phase3.py  --device cuda
+python src/netjepa/scripts/evaluate.py --checkpoint checkpoints/phase3/final.pt --device cuda
+```
+`--raw_dir` points at your folder containing `GeForce_Now/`, `MS_Teams/`, … (defaults to the
+path in `default.yaml` if omitted).
+
+### 5 · Run the frontend / UI
+
+```bash
+make webui            # = cd webui && npm run dev   → http://localhost:5173
+# optional, for live inference in another terminal:
+make serve
+```
+The UI auto-detects the server ("LIVE MODEL") and also works **fully offline** off the
+committed static export if the server isn't running.
