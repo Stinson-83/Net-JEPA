@@ -10,14 +10,14 @@ the unevenness in the cloud reflects real-world capture sizes.
 - **Scope:** 15 apps across the 6 categories, captured on 5G.
 - **Role:** the core training + test set. ~22,900 flows after flow-building (≥5 packets).
 
-Per-app folders map to `(app, category)` in `netjepa/data/preprocess.py::FOLDER_MAP`.
+Per-app folders map to `(app, category)` in `src/netjepa/data/preprocess.py::FOLDER_MAP`.
 
 ## 3.2 Augmentation — VLC / Valencia dataset
 
 - **Source:** [Zenodo · VLC Data](https://zenodo.org/records/15121418) — *"A Novel Flow-Based
   Online Network Traffic Classification"* — **CC-BY-4.0**
 - **Format:** raw `.pcapng` (58 files); we convert to Wireshark CSV with a scapy-based
-  converter (`netjepa/scripts/convert_vlc_pcap.py` — no Wireshark/tshark needed).
+  converter (`src/netjepa/scripts/convert_vlc_pcap.py` — no Wireshark/tshark needed).
 - **What we used:**
   - **MS Teams** (6 files) → `ms_teams` / video_conferencing — **supervised** (boosts the
     starved video-conf class).
@@ -56,7 +56,7 @@ dashboard still reports the full, true distribution on the test split).
 
 ```bash
 # convert raw captures → Wireshark CSV (scapy; --max_packets caps huge cloud-gaming files)
-python netjepa/scripts/convert_vlc_pcap.py --vlc_dir <raw_dir> \
+python src/netjepa/scripts/convert_vlc_pcap.py --vlc_dir <raw_dir> \
     --out_dir <5G_dataset_root> --max_packets 600000
 # then re-run the pipeline (preprocess → phase1 → phase2b → phase3 → export)
 ```

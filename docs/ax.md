@@ -10,7 +10,7 @@ under continuous human review.
 
 ## 8.1 Where the agent was used
 
-- **Whole-repo comprehension** — reading the architecture across `netjepa/`, `server/`,
+- **Whole-repo comprehension** — reading the architecture across `src/netjepa/`, `src/server/`,
   `webui/` and explaining how the pieces fit before changing anything.
 - **Backend hardening** — removing redundancy in the packet→flow→feature pipeline, making it
   config-driven (`default.yaml`), and adding structured loggers throughout.

@@ -20,15 +20,22 @@
   chronological research log (bugs, dead-ends, fixes) is in [`experimentation.md`](experimentation.md).
 - **[Important]** Agentic-AI write-up: [**`docs/ax.md`**](docs/ax.md) — how we built this
   human-steered with Claude Code (Opus 4.8), including **what worked and what did not**.
-- **Source Code** - All source is in this repo: `netjepa/` (core ML package — data, model, loss,
-  training phases, downstream, evaluation, scripts), `server/` (FastAPI + WebSocket inference
-  server), `capture/` + `flows/` + `model/` (live packet capture, flow grouping, classifier
-  adapter), and `webui/` (the "Signal Atlas" React/WebGL front-end). Install/run steps: [docs/usage.md](docs/usage.md).
+- **Source Code** - All Python source is under [**`src/`**](src/): `src/netjepa/` (core ML
+  package — data, model, loss, training phases, downstream, evaluation, scripts), `src/server/`
+  (FastAPI + WebSocket inference server), and `src/capture/` + `src/flows/` + `src/model/` (live
+  packet capture, flow grouping, classifier adapter). The web front-end is `webui/` (the "Signal
+  Atlas" React/WebGL app, with its own `webui/src/`). The package is installable with
+  `pip install -e .`; the training/eval scripts also self-bootstrap, so they run directly with
+  `python src/netjepa/scripts/<script>.py`. Install/run steps: [docs/usage.md](docs/usage.md).
 - **Models Used** - **None** (no pre-trained / foundation / closed-weight models). Net-JEPA is
   trained **from scratch** on the datasets below. See [docs/tech-stack.md §4.4](docs/tech-stack.md).
-- **Models Published** - The trained Net-JEPA checkpoint (`checkpoints/phase3/final.pt`) plus the
-  fitted k-NN/UMAP reducers are produced by the pipeline and are **fully reproducible end-to-end**
-  from the scripts (gitignored due to size; a Hugging Face mirror can be added on request).
+- **Models Published** - The trained Net-JEPA model (Phase-3 checkpoint + fitted cosine k-NN) is
+  **publishable to Hugging Face with one command** — model card in
+  [`docs/hf_model_card.md`](docs/hf_model_card.md), uploader in
+  [`src/netjepa/scripts/publish_hf.py`](src/netjepa/scripts/publish_hf.py):
+  `HF_TOKEN=… python src/netjepa/scripts/publish_hf.py --repo-id <user>/net-jepa` (Apache-2.0).
+  **Hugging Face link:** _‹paste here once published›_. The checkpoint is also fully reproducible
+  end-to-end from the scripts (gitignored due to size).
 - **Datasets Used** -
   - [Kaggle · 5G Traffic Datasets](https://www.kaggle.com/datasets/kimdaegyeom/5g-traffic-datasets) (`kimdaegyeom/5g-traffic-datasets`) — primary training/test set.
   - [Zenodo · VLC / Valencia Flow-Based Traffic Classification](https://zenodo.org/records/15121418) — **CC-BY-4.0** (MS Teams supervised; Netflix/Prime/YouTube/Roblox pretrain-only).

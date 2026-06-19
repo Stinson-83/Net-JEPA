@@ -21,7 +21,7 @@ dist/
 build/
 
 # server-side live inference store (grows at runtime, not a source artifact)
-server/data/
+src/server/data/
 
 # Claude Code runtime/session artifacts (locks, etc.)
 .claude/

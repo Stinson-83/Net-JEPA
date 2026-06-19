@@ -19,7 +19,7 @@ model sees any data:
    - `flow_context` **(15,)**: proto, durations, IAT stats, SYN/FIN/RST ratios, pkts/s, per-host stats, packet count, RTT
    - `padding_mask` **(64,)**: real packet vs. zero-padding
 
-`min_packets`, `max_packets`, `flow_timeout` are all config-driven (`netjepa/configs/default.yaml`).
+`min_packets`, `max_packets`, `flow_timeout` are all config-driven (`src/netjepa/configs/default.yaml`).
 
 ---
 
@@ -81,7 +81,7 @@ recommended path; it didn't help separation.)
 ## 2.5 The Live System
 
 ```
-  .pcap upload ─► server/app.py (FastAPI)
+  .pcap upload ─► src/server/app.py (FastAPI)
                     PcapReplay → FlowTable → NetJEPAClassifier.predict()
                     → forward_downstream → cosine k-NN → category + confidence
                     → UMAP.transform → 2-D point appended to the growing cloud
@@ -98,13 +98,15 @@ server when it's up — see [features.md](features.md) and [usage.md](usage.md).
 ## 2.6 Repository Layout
 
 ```
-netjepa/        core ML package (data, model, loss, training, downstream, evaluation, scripts)
-capture/        live packet capture (pcap replay)
-flows/          flow grouping for the live server
-model/          server-facing classifier adapter
-server/         FastAPI + WebSocket backend
-webui/          "Signal Atlas" React/WebGL front-end
-docs/           this documentation
-doc.md          deep engineering reference
+src/                all Python source (installable via `pip install -e .`)
+  netjepa/          core ML package (data, model, loss, training, downstream, evaluation, scripts)
+  capture/          live packet capture (pcap replay)
+  flows/            flow grouping for the live server
+  model/            server-facing classifier adapter
+  server/           FastAPI + WebSocket backend
+webui/              "Signal Atlas" React/WebGL front-end (its own webui/src/)
+pyproject.toml / setup.py   packaging for the src/ layout
+docs/               this documentation
+doc.md              deep engineering reference
 experimentation.md  honest chronological research log
 ```

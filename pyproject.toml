@@ -1,0 +1,7 @@
+[build-system]
+requires = ["setuptools>=40.8.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# Project metadata, the src/ package layout, and runtime dependencies are
+# declared in setup.py. setup.py is used (rather than a PEP 621 [project] table)
+# so that `pip install -e .` works on older setuptools toolchains too.

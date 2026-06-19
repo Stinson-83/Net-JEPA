@@ -33,21 +33,26 @@ and uses them to classify traffic into 15 application categories across 6 coarse
 ```
 Net-JEPA/
 │
-├── netjepa/                   ← core ML package
-│   ├── data/                  ← data pipeline
-│   ├── model/                 ← neural network components
-│   ├── loss/                  ← loss functions
-│   ├── training/              ← three training phases
-│   ├── downstream/            ← classification heads
-│   ├── evaluation/            ← metrics & diagnostics
-│   ├── utils/                 ← checkpoints, logging
-│   ├── configs/               ← YAML hyperparameters
-│   └── scripts/               ← CLI entry points
+├── src/                       ← all Python source (installable: `pip install -e .`)
+│   ├── netjepa/               ← core ML package
+│   │   ├── data/              ← data pipeline
+│   │   ├── model/             ← neural network components
+│   │   ├── loss/              ← loss functions
+│   │   ├── training/          ← training phases
+│   │   ├── downstream/        ← classification heads
+│   │   ├── evaluation/        ← metrics & diagnostics
+│   │   ├── utils/             ← checkpoints, logging
+│   │   ├── configs/           ← YAML hyperparameters
+│   │   └── scripts/           ← CLI entry points
+│   ├── capture/               ← live packet capture (pcap replay)
+│   ├── flows/                 ← flow grouping for live server
+│   ├── model/                 ← server-facing classifier adapter
+│   └── server/                ← FastAPI + WebSocket dashboard
 │
-├── capture/                   ← live packet capture (pcap replay)
-├── flows/                     ← flow grouping for live server
-├── model/                     ← server-facing classifier adapter
-└── server/                    ← FastAPI + WebSocket dashboard
+├── webui/                     ← "Signal Atlas" React/WebGL front-end (its own webui/src/)
+├── pyproject.toml, setup.py   ← packaging for the src/ layout
+├── requirements.txt           ← pinned runtime deps
+└── docs/                      ← technical documentation
 ```
 
 ---
@@ -73,7 +78,7 @@ Net-JEPA/
 ### Folded-in augmentation datasets
 
 Two public datasets were converted to the same Wireshark-CSV schema (via
-`netjepa/scripts/convert_vlc_pcap.py`, scapy — no tshark) and added through
+`src/netjepa/scripts/convert_vlc_pcap.py`, scapy — no tshark) and added through
 `FOLDER_MAP`. To avoid a **domain confound** (a foreign testbed's artifacts
 leaking into the labelled set), most out-of-domain apps are routed to
 **pretrain-only** via `PRETRAIN_ONLY_FOLDERS`; only the in-distribution-compatible
@@ -91,7 +96,7 @@ from the 28 GB Kaggle archive.
 
 ---
 
-## Preprocessing Pipeline — `netjepa/data/`
+## Preprocessing Pipeline — `src/netjepa/data/`
 
 ```
 Raw CSVs
@@ -133,7 +138,7 @@ Raw CSVs
 
 ---
 
-## Model Architecture — `netjepa/model/`
+## Model Architecture — `src/netjepa/model/`
 
 ```
 ┌─────────────────────────────── NetJEPA ───────────────────────────────┐
@@ -187,7 +192,7 @@ Raw CSVs
 
 ---
 
-## Augmentation / Degradation — `netjepa/data/augment.py`
+## Augmentation / Degradation — `src/netjepa/data/augment.py`
 
 Applied to the **online branch input only** (flow_ctx is always clean, except RTT masking):
 
@@ -206,7 +211,7 @@ Degraded flow  →  online branch
 
 ---
 
-## Loss Functions — `netjepa/loss/`
+## Loss Functions — `src/netjepa/loss/`
 
 ```
 VICReg  (primary)
@@ -240,7 +245,7 @@ CompositeLoss  (Phase 1 / 2 only)
 
 ---
 
-## Training Phases — `netjepa/training/`
+## Training Phases — `src/netjepa/training/`
 
 Recommended path leans on SupCon: **Phase 1 → Phase 2b → Phase 3**.
 (Phase 2 — the unsupervised contrastive refinement — is retained but skipped
@@ -296,7 +301,7 @@ PHASE 3 — Downstream Classification  (50 epochs)
 
 ---
 
-## Evaluation — `netjepa/evaluation/`
+## Evaluation — `src/netjepa/evaluation/`
 
 | Module | Measures |
 |---|---|
@@ -351,15 +356,15 @@ Kaggle-testbed-specific cues. Reported honestly, it shows the model is
 **domain-specific** and motivates domain-diverse pretraining / domain adaptation
 for true cross-deployment — it does not affect the in-domain KPIs above.
 
-### Domain adaptation (DANN) — `netjepa/training/phase2c.py`
+### Domain adaptation (DANN) — `src/netjepa/training/phase2c.py`
 
 To narrow that gap, Phase 2c adds **domain-adversarial training** (DANN): category
 SupCon continues on labelled Kaggle while a gradient-reversal domain
-discriminator (`netjepa/model/domain.py`) aligns the *unlabelled* VLC
+discriminator (`src/netjepa/model/domain.py`) aligns the *unlabelled* VLC
 distribution.
 
 ```
-python netjepa/scripts/train_phase2c.py --processed_dir data/processed_gen \
+python src/netjepa/scripts/train_phase2c.py --processed_dir data/processed_gen \
     --target_parquet data/processed_gen/vlc_adapt.parquet \
     --init_ckpt checkpoints/gen_phase2b/final.pt --ckpt_dir checkpoints/gen_phase2c
 ```
@@ -384,7 +389,10 @@ Measured on held-out VLC (k = labelled VLC flows per category added to the kNN):
 
 ---
 
-## Live Inference Server — `server/` + `model/`
+## Live Inference Server — `src/server/` + `src/model/`
+
+*(Paths below are under `src/`; the diagram uses short module names — `capture/`,
+`flows/`, `model/`, `server/` — for the data flow.)*
 
 ```
                         ┌──────────────────────────────────┐
@@ -427,7 +435,7 @@ Measured on held-out VLC (k = labelled VLC flows per category added to the kNN):
 
 The front-end reads a **static export** when the server is down and the **live
 server** when it's up. Full feature tour: `docs/features.md`. (A minimal legacy
-dashboard under `server/static/` is retained as a serverless fallback.)
+dashboard under `src/server/static/` is retained as a serverless fallback.)
 
 **Environment variables:**
 
@@ -451,38 +459,44 @@ dashboard under `server/static/` is retained as a serverless fallback.)
 ## End-to-End Run Order
 
 ```bash
+# 0. Install (one-time). Registers the src/ packages so `server` etc. import
+#    from anywhere; scripts below also self-bootstrap, so -e is optional.
+pip install -r requirements.txt
+pip install -e .
+
 # 1. Preprocess (one-time, ~5-15 min). min_packets etc. come from
 #    default.yaml; override with --min_packets N if desired.
-python3 netjepa/scripts/preprocess_kaggle.py
+python3 src/netjepa/scripts/preprocess_kaggle.py
 
 # 2. Phase 1 — self-supervised pretraining (~150 epochs, GPU recommended)
-python3 netjepa/scripts/train_phase1.py --device cuda
+python3 src/netjepa/scripts/train_phase1.py --device cuda
 
 # 3. Phase 2b — supervised contrastive fine-tuning (recommended; inits from
 #    Phase 1, balanced sampling). (Phase 2 is optional and skipped here.)
-python3 netjepa/scripts/train_phase2b.py --device cuda
+python3 src/netjepa/scripts/train_phase2b.py --device cuda
 
 # 4. Phase 3 — classification heads; also saves knn.joblib.
 #    Defaults --phase2_ckpt to checkpoints/phase2b/final.pt.
-python3 netjepa/scripts/train_phase3.py --device cuda
+python3 src/netjepa/scripts/train_phase3.py --device cuda
 
 # 5. Full evaluation against test split
-python3 netjepa/scripts/evaluate.py \
+python3 src/netjepa/scripts/evaluate.py \
     --checkpoint checkpoints/phase3/final.pt --device cuda
 
 # 6a. Export artifacts for the web UI / live server (UMAP, metrics, per-flow)
-python3 netjepa/scripts/export_artifacts.py \
+python3 src/netjepa/scripts/export_artifacts.py \
     --checkpoint checkpoints/phase3/final.pt \
     --dataset-id phase3b_supcon --name "Phase 3b — SupCon (balanced)" --device cuda
 
 # 6b. Export the dense, balanced galaxy cloud (full real set: pretrain+downstream+
 #     test, ground-truth coloured, capped per class). Rewrites embeddings_umap.json
 #     + flow_features/* + umap.joblib; leaves metrics/class_stats on the test split.
-python3 netjepa/scripts/export_cloud.py \
+python3 src/netjepa/scripts/export_cloud.py \
     --checkpoint checkpoints/phase3/final.pt \
     --dataset-id phase3b_supcon --cap 1500 --device cuda
 
-# 7. Live server (upload .pcap via POST /api/infer; stages stream over /ws)
+# 7. Live server (upload .pcap via POST /api/infer; stages stream over /ws).
+#    If you skipped `pip install -e .`, add  --app-dir src  to the uvicorn line.
 NETJEPA_CKPT=checkpoints/phase3/final.pt DATASET_ID=phase3b_supcon \
 uvicorn server.app:app --host 0.0.0.0 --port 8000
 ```
@@ -493,18 +507,18 @@ VLC) for which you have unlabelled captures. Requires a holdout split:
 
 ```bash
 # a. Build a Kaggle-train / target-holdout split (target excluded from training)
-python3 netjepa/scripts/preprocess_kaggle.py --out_dir data/processed_gen \
+python3 src/netjepa/scripts/preprocess_kaggle.py --out_dir data/processed_gen \
     --holdout_folders VLC_Teams,VLC_Netflix,VLC_Prime,VLC_YouTube,VLC_Roblox
 #    then split holdout.parquet → vlc_adapt.parquet (unlabelled) + vlc_test.parquet
 
 # b. Train Phase 1→2b→3 on the Kaggle-only split (--processed_dir data/processed_gen,
 #    --ckpt_dir checkpoints/gen_*), then domain-adversarially adapt to the target:
-python3 netjepa/scripts/train_phase2c.py --processed_dir data/processed_gen \
+python3 src/netjepa/scripts/train_phase2c.py --processed_dir data/processed_gen \
     --target_parquet data/processed_gen/vlc_adapt.parquet \
     --init_ckpt checkpoints/gen_phase2b/final.pt --ckpt_dir checkpoints/gen_phase2c
 
 # c. Score transfer on the held-out target test
-python3 netjepa/scripts/evaluate.py --processed_dir data/processed_gen \
+python3 src/netjepa/scripts/evaluate.py --processed_dir data/processed_gen \
     --checkpoint checkpoints/gen_phase2c/final.pt --test_parquet vlc_test.parquet
 ```
 

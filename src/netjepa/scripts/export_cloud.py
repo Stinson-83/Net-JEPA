@@ -37,7 +37,7 @@ from netjepa.utils.io import load_checkpoint
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('--config', default='netjepa/configs/default.yaml')
+    p.add_argument('--config', default=str(Path(__file__).resolve().parents[2] / 'netjepa/configs/default.yaml'))
     p.add_argument('--checkpoint', required=True)
     p.add_argument('--processed_dir', default=None)
     p.add_argument('--dataset-id', required=True)

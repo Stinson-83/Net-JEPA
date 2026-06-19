@@ -27,7 +27,7 @@ def _load_cfg(path: str) -> dict:
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('--config',        default='netjepa/configs/default.yaml')
+    p.add_argument('--config',        default=str(Path(__file__).resolve().parents[2] / 'netjepa/configs/default.yaml'))
     p.add_argument('--checkpoint',    required=True)
     p.add_argument('--processed_dir', default=None)
     p.add_argument('--test_parquet',  default='test.parquet',

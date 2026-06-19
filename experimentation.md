@@ -3,6 +3,11 @@
 End-to-end record of what was built, run, broken, and fixed — in chronological order.
 Intended as a reference for writing formal documentation.
 
+> **Note on paths.** This is a chronological log, so commands appear as they were run at
+> the time (e.g. `python3 netjepa/scripts/...`). The repository was later reorganised into a
+> `src/` layout — today the same scripts live at `src/netjepa/scripts/...`. See
+> [`docs/usage.md`](docs/usage.md) for current, reproducible commands.
+
 ---
 
 ## 1. Preprocessing Pipeline

@@ -179,7 +179,7 @@ def _merge_manifest(out_root: Path, dataset_id: str, name: str, trained_on: str,
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('--config',          default='netjepa/configs/default.yaml')
+    p.add_argument('--config',          default=str(Path(__file__).resolve().parents[2] / 'netjepa/configs/default.yaml'))
     p.add_argument('--checkpoint',      required=True)
     p.add_argument('--processed_dir',   default=None, help='defaults to data.processed_dir from --config')
     p.add_argument('--dataset-id',      required=True, help='sub-directory name; also the manifest entry id')

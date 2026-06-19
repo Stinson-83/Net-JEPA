@@ -10,7 +10,7 @@ from netjepa.training.phase2b import train_phase2b
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('--config',       default='netjepa/configs/default.yaml')
+    p.add_argument('--config',       default=str(Path(__file__).resolve().parents[2] / 'netjepa/configs/default.yaml'))
     p.add_argument('--processed_dir', default=None)
     # Lean on SupCon: initialise from the Phase 1 encoder directly (the
     # unsupervised Phase 2 contrastive refinement didn't help separation).

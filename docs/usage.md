@@ -9,9 +9,15 @@
 ## 6.2 Install
 
 ```bash
-pip install -r requirements.txt
-cd webui && npm install && cd ..
+pip install -r requirements.txt   # runtime deps (torch, scapy, fastapi, umap-learn, …)
+pip install -e .                  # register the src/ packages (netjepa, server, capture, flows, model)
+cd webui && npm install && cd ..  # front-end deps
 ```
+
+All Python source lives under `src/` (see [architecture.md §2.6](architecture.md)). `pip install -e .`
+makes `netjepa`, `server`, etc. importable from any directory. You can skip it if you prefer — the
+training/eval scripts self-bootstrap their import path, and the server can be launched with
+`--app-dir src` (shown below).
 
 ## 6.3 Run the live demo (the fast path)
 
@@ -21,6 +27,7 @@ in place you can run the demo directly — two processes:
 ```bash
 # Terminal A — inference server (defaults are already correct)
 uvicorn server.app:app --host 0.0.0.0 --port 8000
+#   if you skipped `pip install -e .`, add  --app-dir src  to the line above
 #   NETJEPA_CKPT=checkpoints/phase3/final.pt   DATASET_ID=phase3b_supcon
 #   sanity check:  curl localhost:8000/api/health   → {"ok": true, ...}
 
@@ -38,26 +45,26 @@ works **fully offline** off the committed static export. Production build: `npm 
 
 ```bash
 # 1. Preprocess (CSVs → parquet). Thresholds come from default.yaml.
-python netjepa/scripts/preprocess_kaggle.py
+python src/netjepa/scripts/preprocess_kaggle.py
 
 # 2. Phase 1 — self-supervised pretraining (~15–25 min on GPU)
-python netjepa/scripts/train_phase1.py  --device cuda
+python src/netjepa/scripts/train_phase1.py  --device cuda
 
 # 3. Phase 2b — category SupCon + α-centering (recommended; inits from Phase 1)
-python netjepa/scripts/train_phase2b.py --device cuda
+python src/netjepa/scripts/train_phase2b.py --device cuda
 
 # 4. Phase 3 — heads + k-NN (saves knn.joblib); defaults to Phase 2b checkpoint
-python netjepa/scripts/train_phase3.py  --device cuda
+python src/netjepa/scripts/train_phase3.py  --device cuda
 
 # 5. Evaluate against the test split
-python netjepa/scripts/evaluate.py --checkpoint checkpoints/phase3/final.pt --device cuda
+python src/netjepa/scripts/evaluate.py --checkpoint checkpoints/phase3/final.pt --device cuda
 
 # 6a. Export metrics + reducer for the UI
-python netjepa/scripts/export_artifacts.py --checkpoint checkpoints/phase3/final.pt \
+python src/netjepa/scripts/export_artifacts.py --checkpoint checkpoints/phase3/final.pt \
     --dataset-id phase3b_supcon --name "Phase 3b" --device cuda
 
 # 6b. Export the dense, balanced galaxy cloud (full real set, capped per class)
-python netjepa/scripts/export_cloud.py --checkpoint checkpoints/phase3/final.pt \
+python src/netjepa/scripts/export_cloud.py --checkpoint checkpoints/phase3/final.pt \
     --dataset-id phase3b_supcon --cap 1500 --device cuda
 ```
 
@@ -65,7 +72,7 @@ python netjepa/scripts/export_cloud.py --checkpoint checkpoints/phase3/final.pt 
 
 ```bash
 # convert raw captures → Wireshark CSV (add a FOLDER_MAP entry for the new app/category)
-python netjepa/scripts/convert_vlc_pcap.py --vlc_dir <raw_dir> \
+python src/netjepa/scripts/convert_vlc_pcap.py --vlc_dir <raw_dir> \
     --out_dir <5G_dataset_root> --max_packets 600000
 # then re-run steps 1–6 above
 ```
@@ -74,14 +81,29 @@ python netjepa/scripts/convert_vlc_pcap.py --vlc_dir <raw_dir> \
 
 ```bash
 # build a Kaggle-train / target-holdout split, then domain-adversarially adapt
-python netjepa/scripts/preprocess_kaggle.py --out_dir data/processed_gen \
+python src/netjepa/scripts/preprocess_kaggle.py --out_dir data/processed_gen \
     --holdout_folders VLC_Teams,VLC_Netflix,VLC_Prime,VLC_YouTube,VLC_Roblox
-python netjepa/scripts/train_phase2c.py --processed_dir data/processed_gen \
+python src/netjepa/scripts/train_phase2c.py --processed_dir data/processed_gen \
     --target_parquet data/processed_gen/vlc_adapt.parquet \
     --init_ckpt checkpoints/gen_phase2b/final.pt --ckpt_dir checkpoints/gen_phase2c
-python netjepa/scripts/evaluate.py --processed_dir data/processed_gen \
+python src/netjepa/scripts/evaluate.py --processed_dir data/processed_gen \
     --checkpoint checkpoints/gen_phase2c/final.pt --test_parquet vlc_test.parquet
 ```
+
+### Optional — publish the model to Hugging Face
+
+The trained model is Apache-2.0 and tiny (~7 MB checkpoint + ~1.5 MB k-NN). Publish it under
+your own namespace with one command (needs a write token from
+https://huggingface.co/settings/tokens):
+
+```bash
+pip install huggingface_hub
+HF_TOKEN=hf_xxx python src/netjepa/scripts/publish_hf.py --repo-id <your-username>/net-jepa
+```
+
+This uploads the Phase-3 checkpoint, the fitted cosine k-NN, the config, and the model card
+([`docs/hf_model_card.md`](hf_model_card.md) → the repo's `README.md`). Then paste the printed
+URL into the top-level README ("Models Published") and [tech-stack.md §4.4](tech-stack.md).
 
 ## 6.5 User guide — the Signal Atlas
 

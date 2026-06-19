@@ -15,9 +15,11 @@ This is the single backend behind the unified web demo. It does two things:
        GET /api/cloud    — reference points + everything inferred so far
        GET /api/metrics  — project KPIs / per-class stats
 
-Run:
+Run (after `pip install -e .` from the repo root):
     uvicorn server.app:app --reload
     uvicorn server.app:app --host 0.0.0.0 --port 8000
+Without installing, point uvicorn at the source root instead:
+    uvicorn server.app:app --app-dir src --host 0.0.0.0 --port 8000
 
 Environment variables:
     DATASET_ID      — export sub-dir under webui/public/data (default: phase3b_supcon)
@@ -41,8 +43,12 @@ from typing import Any, Dict, List
 
 import numpy as np
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT))
+# This file lives at  <repo>/src/server/app.py , so:
+#   parents[1] = <repo>/src   — the import root (capture/flows/model/netjepa live here)
+#   parents[2] = <repo>       — the project root (webui/, checkpoints/, data/ live here)
+IMPORT_ROOT  = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(IMPORT_ROOT))
 
 from fastapi import FastAPI, UploadFile, File, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -54,13 +60,21 @@ from flows.flow_table import FlowTable
 from model.netjepa_classifier import NetJEPAClassifier
 
 # ── Configuration ─────────────────────────────────────────────────────────────
+def _resolve(p: str) -> str:
+    """Resolve a possibly-relative path against the project root so the server
+    behaves the same no matter which directory it is launched from."""
+    pp = Path(p)
+    return str(pp if pp.is_absolute() else (PROJECT_ROOT / pp))
+
 DATASET_ID   = os.environ.get('DATASET_ID',   'phase3b_supcon')
-NETJEPA_CKPT = os.environ.get('NETJEPA_CKPT', 'checkpoints/phase3/final.pt')
-KNN_PATH     = os.environ.get('KNN_PATH',     '')
-PCAP_PATH    = os.environ.get('PCAP_PATH',    '')
+NETJEPA_CKPT = _resolve(os.environ.get('NETJEPA_CKPT', 'checkpoints/phase3/final.pt'))
+KNN_PATH     = os.environ.get('KNN_PATH', '')
+KNN_PATH     = _resolve(KNN_PATH) if KNN_PATH else ''
+PCAP_PATH    = os.environ.get('PCAP_PATH', '')
+PCAP_PATH    = _resolve(PCAP_PATH) if PCAP_PATH else ''
 REPLAY_SPEED = float(os.environ.get('REPLAY_SPEED', '1.0'))
 
-WEBUI_DATA   = REPO_ROOT / 'webui' / 'public' / 'data'
+WEBUI_DATA   = PROJECT_ROOT / 'webui' / 'public' / 'data'
 DATASET_DIR  = WEBUI_DATA / DATASET_ID
 UMAP_PATH    = DATASET_DIR / 'umap.joblib'
 

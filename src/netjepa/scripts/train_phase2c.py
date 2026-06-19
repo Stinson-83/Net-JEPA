@@ -10,7 +10,7 @@ from netjepa.training.phase2c import train_phase2c
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('--config',         default='netjepa/configs/default.yaml')
+    p.add_argument('--config',         default=str(Path(__file__).resolve().parents[2] / 'netjepa/configs/default.yaml'))
     p.add_argument('--processed_dir',  required=True, help='source (Kaggle) processed dir')
     p.add_argument('--target_parquet', required=True, help='unlabelled target flows (e.g. vlc_adapt.parquet)')
     p.add_argument('--init_ckpt',      required=True, help='source Phase 2b checkpoint to adapt')
