@@ -16,7 +16,7 @@ SCRIPTS := src/netjepa/scripts
 
 .DEFAULT_GOAL := help
 .PHONY: help install demo stop reproduce serve webui \
-        fetch fetch-weights fetch-data fetch-foldins evaluate train export clean clean-assets
+        fetch fetch-weights fetch-data fetch-foldins evaluate infer train export clean clean-assets
 
 help: ## Show this help
 	@awk 'BEGIN{FS=":.*## "} \
@@ -39,7 +39,7 @@ reproduce: install fetch evaluate ## Reproduce the KPIs: install -> fetch weight
 install: .make-installed ## Install Python + web dependencies (auto, cached)
 .make-installed: requirements.txt setup.py webui/package.json
 	$(PY) -m pip install -r requirements.txt
-	$(PY) -m pip install -e .
+	-$(PY) -m pip install -e . --no-build-isolation
 	cd webui && npm install
 	@touch .make-installed
 
@@ -56,6 +56,9 @@ fetch-foldins: install ## Data + VLC/cloud-gaming fold-ins for the exact publish
 ##@ Run the pipeline (terminal)
 evaluate: install ## Evaluate the checkpoint and print the KPI summary (vars: CKPT, DEVICE)
 	$(PY) $(SCRIPTS)/evaluate.py --checkpoint $(CKPT) --device $(DEVICE)
+infer: install ## Classify a pcap in the terminal (no UI/server): make infer PCAP=path/to/file.pcap
+	@test -n "$(PCAP)" || { echo "usage: make infer PCAP=path/to/file.pcap"; exit 1; }
+	$(PY) $(SCRIPTS)/infer_pcap.py "$(PCAP)" --device $(DEVICE)
 train: install ## Train from scratch: phase1 -> phase2b -> phase3 -> evaluate (run 'make fetch-data' first; DEVICE=cuda)
 	$(PY) $(SCRIPTS)/train_phase1.py  --device $(DEVICE)
 	$(PY) $(SCRIPTS)/train_phase2b.py --device $(DEVICE)
