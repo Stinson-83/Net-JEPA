@@ -44,10 +44,13 @@ export default function ColdOpen() {
           </div>
         ) : (
           <div className="nj-rise flex flex-col items-center">
-            <div className="nj-display text-[clamp(48px,9vw,118px)] font-bold leading-none tracking-tight">
-              <span className="nj-sheen">NET-JEPA</span>
-            </div>
-            <p className="mt-3 text-[clamp(13px,1.6vw,18px)] tracking-[0.2em] text-[var(--nj-text-muted)]">
+            <img
+              src="/netjepa_logo.png"
+              alt="Net-JEPA"
+              className="block h-[clamp(68px,13vw,152px)] w-auto rounded-2xl bg-white px-4 py-2"
+              style={{ boxShadow: '0 0 64px -12px var(--nj-accent-glow)' }}
+            />
+            <p className="mt-5 text-[clamp(13px,1.6vw,18px)] tracking-[0.2em] text-[var(--nj-text-muted)]">
               THE SHAPE OF ENCRYPTED TRAFFIC
             </p>
             <button onClick={(e) => { e.stopPropagation(); done(); }}

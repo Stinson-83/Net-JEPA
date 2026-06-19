@@ -31,19 +31,14 @@ export default function TopBar() {
   return (
     <header className="relative z-30 flex h-[60px] shrink-0 items-center gap-4 px-5">
       {/* wordmark */}
-      <button onClick={() => setScene('atlas')} className="group flex items-center gap-3">
+      <button onClick={() => setScene('atlas')} className="group flex flex-col items-center gap-1 leading-none">
         <img
           src="/netjepa_logo.png"
           alt="Net-JEPA"
-          className="h-9 w-9 rounded-[11px] transition-transform group-hover:scale-105"
-          style={{ boxShadow: '0 0 12px -2px var(--nj-accent-glow)' }}
+          className="block h-7 w-auto rounded-md bg-white px-1.5 transition-transform group-hover:scale-105"
+          style={{ boxShadow: '0 0 14px -3px var(--nj-accent-glow)' }}
         />
-        <div className="leading-none">
-          <div className="nj-display text-[15px] font-bold tracking-tight">
-            <span className="nj-sheen">NET-JEPA</span>
-          </div>
-          <div className="text-[10px] tracking-wide text-[var(--nj-text-faint)]">The shape of encrypted traffic</div>
-        </div>
+        <div className="text-[10px] tracking-wide text-[var(--nj-text-faint)]">The shape of encrypted traffic</div>
       </button>
 
       {/* scene tabs */}

@@ -53,7 +53,9 @@ A top-bar switches scenes (keys `1–4`):
 ## 7.6 Cold open
 
 A short **cinematic intro** ("Signal Atlas") sets the stakes — encrypted traffic, no
-decryption — before dropping you into the galaxy. Skippable, and bypassable for kiosk mode.
+decryption — and resolves into the **Net-JEPA logo** above the tagline *"The shape of
+encrypted traffic"* before dropping you into the galaxy. The same logo persists as the
+top-bar wordmark (click it to return to the Atlas). Skippable, and bypassable for kiosk mode.
 
 ## 7.7 Live-model awareness
 
