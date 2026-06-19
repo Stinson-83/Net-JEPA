@@ -7,13 +7,16 @@
 // the heuristic mockProjector. When it's NOT reachable every call here returns
 // null, and the caller transparently falls back to the static export / mock.
 //
-// Point at a different host with VITE_SERVER_URL (default http://localhost:8000).
+// By default the UI talks to the API at the SAME origin ('') — relative /api +
+// /ws — and the Vite dev server proxies those to the inference server on :8000
+// (see vite.config.ts). So only port 5173 needs to be reachable (one SSH tunnel)
+// for the live demo. Override the host with VITE_SERVER_URL if needed.
 // ───────────────────────────────────────────────────────────────────────────
 
 import type { MetricsData, UmapPoint } from './types';
 
 const SERVER_URL = (
-  (import.meta.env.VITE_SERVER_URL as string | undefined) ?? 'http://localhost:8000'
+  (import.meta.env.VITE_SERVER_URL as string | undefined) ?? ''
 ).replace(/\/+$/, '');
 
 export function serverUrl(): string {

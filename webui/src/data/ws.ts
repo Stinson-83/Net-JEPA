@@ -25,8 +25,11 @@ let handlers: StreamHandlers | null = null;
 const RECONNECT_MS = 3_000;
 
 function wsUrl(): string {
-  // http(s)://host → ws(s)://host
-  return `${serverUrl().replace(/^http/, 'ws')}/ws`;
+  const base = serverUrl();
+  if (base) return `${base.replace(/^http/, 'ws')}/ws`;   // explicit host override
+  // same-origin: go through the Vite proxy so only one port needs to be exposed
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  return `${proto}://${location.host}/ws`;
 }
 
 function scheduleReconnect(): void {
