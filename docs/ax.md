@@ -19,11 +19,12 @@ under continuous human review.
   the Phase-3 head collapse from *double* class-imbalance correction (balanced sampler **and**
   class weights at once).
 - **Running the pipeline** end-to-end — preprocess → Phase 1 → 2b → 3 → evaluate → export.
-- **Folding in real data** — writing the scapy pcap→CSV converter, the `FOLDER_MAP` /
-  `PRETRAIN_ONLY_FOLDERS` routing, and stream-extracting only the 5 GB of 5G captures needed
+- **Folding in real data** — writing the scapy pcap→CSV converter and the `FOLDER_TO_TYPE`
+  source→traffic-type routing, and stream-extracting only the 5 GB of 5G captures needed
   from a 28 GB Kaggle archive.
-- **The cross-domain harness + DANN** — building the train-Kaggle/test-VLC generalization run
-  and the gradient-reversal domain-adversarial phase.
+- **The 8-traffic-type rebuild** — `build_traffic_dataset.py` (per-type CSVs + leak-free splits),
+  the per-capture host-stats fix, and the terminal `infer_pcap` path; plus the optional
+  gradient-reversal domain-adversarial (DANN) phase for future cross-deployment.
 - **A full front-end rebuild** — the "Signal Atlas" React/WebGL experience from scratch,
   verified with headless WebGL screenshots.
 - **This documentation** — the `docs/` set, `doc.md`, and `experimentation.md`.
@@ -32,8 +33,12 @@ under continuous human review.
 
 - **Tight loops on hard bugs.** The agent could read the failure, form a hypothesis, change
   code, re-run, and read the new output — compressing debugging cycles dramatically.
-- **Honest evaluation.** When Kaggle→VLC transfer measured **5%**, the agent surfaced it,
-  diagnosed it (label shift / domain-specific cues), and we *reported* it rather than buried
+- **Honest evaluation + root-cause debugging.** Test accuracy looked fine (0.86) yet uploaded
+  `.pcap`s misclassified — even the literal Netflix VOD training source read as cloud_gaming.
+  The agent diffed the train vs. inference feature tensors, proved they were byte-identical,
+  then isolated the real cause: **host stats computed globally instead of per-capture** (an
+  unreproducible train/inference leak). Fixing it lifted accuracy **0.86 → 0.977** *and* made
+  real-pcap upload work. We report the remaining weak spot (single-flow pcaps) rather than bury
   it. Agentic tooling made the honest path the cheap path.
 - **Breadth without losing the thread.** It moved between PyTorch training code, FastAPI
   serving, and a TypeScript/WebGL front-end while keeping the KPIs in view.
@@ -43,9 +48,10 @@ under continuous human review.
 ## 8.3 What didn't (and the human's role)
 
 - **The agent does not invent research direction.** Every key idea — meeting the cosine KPI
-  with **α-centering**, treating SupCon at the **category** level, routing out-of-domain data
-  to **pretrain-only** to kill the domain confound — came from human insight about the *data*
-  and the *KPI definition*. The agent implemented and validated; it did not decide.
+  with **α-centering**, treating SupCon at the **traffic-type** level, and realising that
+  **host stats must be per-capture** (train/inference-consistent) — came from human insight
+  about the *data* and the *KPI definition*. The agent implemented, diffed, and validated; it
+  did not decide.
 - **It will over-correct if unsupervised.** The double class-imbalance fix and a too-large
   DBSCAN `eps` are examples where naïve "more is better" changes hurt, and a human reading the
   metrics caught it.

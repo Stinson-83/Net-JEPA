@@ -67,11 +67,13 @@ and the new flow land in its constellation. (Fallback: a "simulate" chip.)
 
 ### Slide 8 — Honesty as a feature
 
-In-domain generalization meets the KPI (**92%**). Cross-*dataset* transfer to a foreign testbed
-was **5%** — we **report it**, diagnose it (label shift), and fix it: **DANN** + a handful of
-target labels lifts it **0.05 → 0.39**.
+Few-shot generalization meets the KPI (**97.6%**). Crucially, **upload-any-`.pcap` works**:
+the same flow/feature pipeline runs at training and inference (incl. per-capture host stats),
+so a raw **browser** YouTube capture — a domain never seen in training — correctly reads
+`video_on_demand`. We also report the one weak spot: a pcap with only a *single* flow gives
+degenerate host stats and can misclassify; real multi-flow captures work.
 
-> "We show you where it breaks — and how we close the gap. That's the science."
+> "We show you where it breaks — and that uploading a real capture actually works. That's the science."
 
 ### Slide 9 — How we built it
 

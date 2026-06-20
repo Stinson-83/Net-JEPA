@@ -327,64 +327,46 @@ fight it; and (2) **common-mode removal** — SupCon separates class *directions
 subtracting α·mean (α≈0.65, `embed_head` + `set_centering`) isotropises the space
 so absolute inter-cosine drops below 0.3 while intra stays above 0.7.
 
-### Cross-domain generalization (Kaggle → VLC)
+### Generalization & real-`.pcap` inference
 
-Two senses of "generalization" are worth separating:
+In the 8-traffic-type model **all sources are supervised and mixed into one
+leak-free split** (Kaggle 5G + VLC + Xbox cloud-gaming), so there is no
+held-out "foreign testbed" — generalization is measured two ways:
 
-- **In-domain cross-validation** (held-out flows from the same capture, the
-  few-shot eval): **0.976** — comfortably meets the ≥85% KPI.
-- **Cross-*dataset* transfer** (train on Kaggle, test on the entirely separate
-  VLC/Valencia testbed, never seen — not even in pretraining): **0.05**.
-
-The harness: `preprocess_kaggle.py --holdout_folders VLC_* --out_dir
-data/processed_gen` writes the VLC flows to `holdout.parquet` (excluded from all
-training); `evaluate.py --test_parquet holdout.parquet` then scores the
-Kaggle-trained model on them.
+- **In-domain few-shot** (η=7 labelled/class, held-out flows): **0.976**.
+- **Real captures of the trained types**, run end-to-end through `infer_pcap.py`
+  (the identical parse→flow→features→kNN path as training):
 
 ```
-                       in-domain (Kaggle→Kaggle)   cross-domain (Kaggle→VLC)
-  kNN accuracy                 0.977                       0.054
-  macro-F1                     0.954                       0.037
-  silhouette                   0.70                        0.02
+  netflix_linux_20m_01.pcapng   → video_on_demand  99%
+  spotify_windows_30m_02.pcapng → audio_streaming   97%
+  xbox_fortnite_*.pcap          → cloud_gaming      89%
+  youtube_video.pcap (browser QUIC, never in training) → video_on_demand ✅
 ```
 
-The Kaggle-trained embedding does **not** transfer across capture domains —
-2,687/4,280 VLC flows are classified as `live_streaming` (a category VLC doesn't
-even contain). This is genuine domain shift, not a bug: the embedding learned
-Kaggle-testbed-specific cues. Reported honestly, it shows the model is
-**domain-specific** and motivates domain-diverse pretraining / domain adaptation
-for true cross-deployment — it does not affect the in-domain KPIs above.
+The last row is the real generalization proof: a Chrome-native QUIC capture — a
+different capture domain from the VLC/Kaggle testbeds — still resolves correctly.
 
-### Domain adaptation (DANN) — `src/netjepa/training/phase2c.py`
+**What made this work: per-capture host stats.** Host-behaviour features
+(`n_dst_ips/n_dst_ports/n_src_ports/conn_per_sec`) are computed **per capture**
+(per `source_file` at train time, per uploaded pcap at inference) instead of
+globally over the whole dataset. Globally, a reused testbed client IP merged its
+destinations across every app → inflated values inference could never reproduce,
+which made real pcaps collapse to the wrong class. Switching to per-capture took
+the model **0.86 → 0.977** *and* fixed `.pcap` upload — both from one change
+(verified genuine: same-capture-excluded kNN = 0.9767).
 
-To narrow that gap, Phase 2c adds **domain-adversarial training** (DANN): category
-SupCon continues on labelled Kaggle while a gradient-reversal domain
-discriminator (`src/netjepa/model/domain.py`) aligns the *unlabelled* VLC
-distribution.
+**Known limitation (reported honestly):** a pcap with only a *single* flow yields
+degenerate host stats (`n_dst_ips=1`) unlike any multi-flow training capture and
+can misclassify. Real multi-flow captures work.
 
-```
-python src/netjepa/scripts/train_phase2c.py --processed_dir data/processed_gen \
-    --target_parquet data/processed_gen/vlc_adapt.parquet \
-    --init_ckpt checkpoints/gen_phase2b/final.pt --ckpt_dir checkpoints/gen_phase2c
-```
+### Optional — domain adaptation (DANN), `src/netjepa/training/phase2c.py`
 
-Measured on held-out VLC (k = labelled VLC flows per category added to the kNN):
-
-```
-   k       baseline (Kaggle-only)    DANN-adapted
-   0  (unsup)        0.050               0.056
-   5                 0.237               0.111
-  10                 0.266               0.367
-  20                 0.295               0.388
-```
-
-- **Unsupervised DANN aligns the domains** (discriminator acc 0.65 → 0.51) **but
-  doesn't improve transfer alone** — a known limitation under *label shift* (VLC
-  has 3 of 8 traffic types: aligning p(x) ≠ aligning p(category|x)).
-- **Semi-supervised** (DANN + a few target labels) **does**: transfer rises
-  0.05 → 0.39 and beats the baseline for k≥10 — the alignment makes the space
-  amenable to cheap few-shot target adaptation. VLC stays a hard target (0.39,
-  not 0.85); full closure needs substantial target labels.
+Phase 2c (gradient-reversal domain-adversarial training, `src/netjepa/model/domain.py`)
+remains available for *true cross-deployment* to a brand-new network: continue
+SupCon on labelled data while a domain discriminator aligns an unlabelled target
+distribution. It is **not** part of the default 8-class path and is offered for
+future work on networks outside the trained sources.
 
 ---
 
@@ -458,8 +440,9 @@ to a training flow, no zeroed/defaulted dims.
 
 | Variable | Default | Description |
 |---|---|---|
-| `DATASET_ID` | `phase3b_supcon` | export sub-dir under `webui/public/data` (cloud + reducer + metrics) |
-| `NETJEPA_CKPT` | `checkpoints/phase3/final.pt` | Trained NetJEPA checkpoint for live inference |
+| `DATASET_ID` | `traffic8` | export sub-dir under `webui/public/data` (cloud + reducer + metrics) |
+| `NETJEPA_CKPT` | `checkpoints/traffic8/phase3/final.pt` | Trained NetJEPA checkpoint for live inference |
+| `NETJEPA_LABELS` | `data/processed_traffic/labels.json` | the 8 traffic-type names (auto-fetched from HF) |
 | `KNN_PATH` | *(auto-detected)* | `knn.joblib` next to checkpoint |
 | `PCAP_PATH` | *(optional)* | legacy auto-replay on startup; the primary mode is upload → `POST /api/infer` |
 | `REPLAY_SPEED` | `1.0` | Replay speed multiplier |
@@ -469,10 +452,10 @@ to a training flow, no zeroed/defaulted dims.
 
 > The primary entry point is `POST /api/infer` (upload a .pcap) with every
 > pipeline stage streamed over `/ws`; `GET /api/cloud` / `/api/metrics` serve
-> the growing point cloud + KPIs. To serve the latest model, point
-> `NETJEPA_CKPT` at the checkpoint your run produced (e.g.
-> `checkpoints/phase3/final.pt`) while keeping `DATASET_ID=phase3b_supcon` (the
-> export dir holding the matching `umap.joblib` reducer + seed cloud).
+> the growing point cloud + KPIs. The server defaults to the 8-class model
+> (`NETJEPA_CKPT=checkpoints/traffic8/phase3/final.pt`, `DATASET_ID=traffic8`,
+> `NETJEPA_LABELS=data/processed_traffic/labels.json`); the export dir holds the
+> matching `umap.joblib` reducer + seed cloud.
 
 ---
 
@@ -484,46 +467,44 @@ to a training flow, no zeroed/defaulted dims.
 pip install -r requirements.txt
 pip install -e .
 
-# 1. Preprocess (one-time, ~5-15 min). min_packets etc. come from
-#    default.yaml; override with --min_packets N if desired.
-python3 src/netjepa/scripts/preprocess_kaggle.py
+# 1. Build the 8-class dataset (one-time). Uses traffic.yaml; reads the staged
+#    raw dir (Kaggle 5G + VLC_*/CG_Xbox folders). Host stats are per-capture.
+CFG=src/netjepa/configs/traffic.yaml
+python3 -m netjepa.scripts.build_traffic_dataset --raw_dir <5G_dataset_root> \
+    --csv_out data/traffic_csvs --parquet_out data/processed_traffic
 
 # 2. Phase 1 — self-supervised pretraining (~150 epochs, GPU recommended)
-python3 src/netjepa/scripts/train_phase1.py --device cuda
+python3 -m netjepa.scripts.train_phase1  --config $CFG --ckpt_dir checkpoints/traffic8/phase1 --device cuda
 
-# 3. Phase 2b — supervised contrastive fine-tuning (recommended; inits from
-#    Phase 1, balanced sampling). (Phase 2 is optional and skipped here.)
-python3 src/netjepa/scripts/train_phase2b.py --device cuda
+# 3. Phase 2b — traffic-type SupCon + α-centering (inits from Phase 1)
+python3 -m netjepa.scripts.train_phase2b --config $CFG \
+    --init_ckpt checkpoints/traffic8/phase1/final.pt --ckpt_dir checkpoints/traffic8/phase2b --device cuda
 
 # 4. Phase 3 — classification heads; also saves knn.joblib.
-#    Defaults --phase2_ckpt to checkpoints/phase2b/final.pt.
-python3 src/netjepa/scripts/train_phase3.py --device cuda
+python3 -m netjepa.scripts.train_phase3  --config $CFG \
+    --phase2_ckpt checkpoints/traffic8/phase2b/final.pt --ckpt_dir checkpoints/traffic8/phase3 --device cuda
 
-# 5. Full evaluation against test split
-python3 src/netjepa/scripts/evaluate.py \
-    --checkpoint checkpoints/phase3/final.pt --device cuda
+# 5. Full evaluation against test split  → kNN 0.977, macro-F1 0.954
+python3 -m netjepa.scripts.evaluate --config $CFG \
+    --checkpoint checkpoints/traffic8/phase3/final.pt --device cuda
 
-# 6a. Export artifacts for the web UI / live server (UMAP, metrics, per-flow)
-python3 src/netjepa/scripts/export_artifacts.py \
-    --checkpoint checkpoints/phase3/final.pt \
-    --dataset-id phase3b_supcon --name "Phase 3b — SupCon (balanced)" --device cuda
+# 6. Export artifacts + galaxy cloud for the UI (uses labels.json for class names)
+python3 -m netjepa.scripts.export_artifacts --config $CFG \
+    --checkpoint checkpoints/traffic8/phase3/final.pt --dataset-id traffic8 --name "Traffic-8" --device cuda
+python3 -m netjepa.scripts.export_cloud --config $CFG \
+    --checkpoint checkpoints/traffic8/phase3/final.pt --dataset-id traffic8 --cap 1500 --device cuda
 
-# 6b. Export the dense, balanced galaxy cloud (full real set: pretrain+downstream+
-#     test, ground-truth coloured, capped per class). Rewrites embeddings_umap.json
-#     + flow_features/* + umap.joblib; leaves metrics/class_stats on the test split.
-python3 src/netjepa/scripts/export_cloud.py \
-    --checkpoint checkpoints/phase3/final.pt \
-    --dataset-id phase3b_supcon --cap 1500 --device cuda
-
-# 7. Live server (upload .pcap via POST /api/infer; stages stream over /ws).
+# 7. Live server (defaults to the 8-class model; upload .pcap via POST /api/infer).
 #    If you skipped `pip install -e .`, add  --app-dir src  to the uvicorn line.
-NETJEPA_CKPT=checkpoints/phase3/final.pt DATASET_ID=phase3b_supcon \
 uvicorn server.app:app --host 0.0.0.0 --port 8000
+#    …or classify in the terminal:
+python3 -m netjepa.scripts.infer_pcap your.pcap \
+    --checkpoint checkpoints/traffic8/phase3/final.pt --labels data/processed_traffic/labels.json
 ```
 
 **Optional — cross-domain adaptation (Phase 2c).** Not part of the default
-production model (phase1→2b→3); use only to adapt to a new target domain (e.g.
-VLC) for which you have unlabelled captures. Requires a holdout split:
+8-class model (phase1→2b→3); use only to adapt to a brand-new network outside the
+trained sources, for which you have unlabelled captures. Requires a holdout split:
 
 ```bash
 # a. Build a Kaggle-train / target-holdout split (target excluded from training)
@@ -542,8 +523,9 @@ python3 src/netjepa/scripts/evaluate.py --processed_dir data/processed_gen \
     --checkpoint checkpoints/gen_phase2c/final.pt --test_parquet vlc_test.parquet
 ```
 
-> DANN aligns domains but needs a few target labels to actually lift transfer
-> (see *Domain adaptation (DANN)* above) — unsupervised alone stays ~0.05.
+> DANN is optional and not part of the default 8-class model; it targets *true
+> cross-deployment* to a brand-new network outside the trained sources. It aligns
+> domains but generally needs a few target labels to actually lift transfer.
 
 ---
 

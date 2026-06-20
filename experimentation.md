@@ -7,6 +7,12 @@ Intended as a reference for writing formal documentation.
 > the time (e.g. `python3 netjepa/scripts/...`). The repository was later reorganised into a
 > `src/` layout — today the same scripts live at `src/netjepa/scripts/...`. See
 > [`docs/usage.md`](docs/usage.md) for current, reproducible commands.
+>
+> **Note on results.** Numbers in §1–§11 below are historical waypoints from the earlier
+> **6-category** model. The project's **current/final model classifies 8 common traffic
+> types** (accuracy **0.977**, macro-F1 **0.954**) — see §12 and [`docs/results.md`](docs/results.md).
+> Earlier "cross-dataset transfer to VLC" experiments no longer apply: in the 8-class model VLC
+> is part of the *supervised* training set, not a held-out foreign domain.
 
 ---
 
@@ -545,3 +551,47 @@ drift), snap-confined chromium couldn't write `/tmp` (used google-chrome), and
 | 14 | When a class looks sparse, the right fix is *real* data, not mocking and not capping the majority classes down — find a permissively-licensed source and fold it in (cloud-gaming/Teams lifted density and rescued video-conf to F1 0.93) |
 | 15 | Pin transitive infra deps that the framework leans on (uvicorn ⇄ `websockets` ≥10) — a silent minor-version regression broke the entire `/ws` live stream |
 | 14 | Unsupervised domain adaptation (DANN) aligns marginal p(x) but not p(y\|x) under label shift — verify the discriminator is confused AND that target *accuracy* moves; here only a few labelled target samples (semi-supervised DA) actually improved transfer (0.05 → 0.39) |
+
+---
+
+## 12. (2026-06) The 8-traffic-type model — current/final results
+
+The project moved from the 6-category model above to **8 common traffic types**
+(audio_streaming, cloud_gaming, live_streaming, metaverse, online_gaming,
+video_conferencing, video_on_demand, web_browsing), built by
+`build_traffic_dataset.py` from the **full** Kaggle 5G + VLC (incl. Spotify, Web)
++ Xbox cloud-gaming — **all supervised** into one leak-free 70/15/15 split
+(28,892 flows: 20,224 / 4,333 / 4,335).
+
+**12.1 The real-pcap bug and its fix.** Uploaded `.pcap`s were misclassifying even
+though test accuracy looked fine — the literal Netflix VOD training source read as
+cloud_gaming through the inference path. Root cause: host-behaviour features
+(`n_dst_ips/n_dst_ports/n_src_ports/conn_per_sec`) were computed **globally** over
+all flows, so a reused testbed client IP merged destinations across every app —
+inflated values inference (one pcap) could never reproduce. Proven by feature diff
+(the two pcap readers produce byte-identical features) and by flipping predictions
+just by changing host stats. **Fix:** compute host stats **per `source_file`**
+(per capture), matching how `infer_pcap`/the server compute them per-pcap.
+
+**12.2 Result.** Rebuild + retrain → the fix lifted *every* metric and made pcap
+inference correct:
+
+| | global host stats (before) | per-capture (after) |
+|---|---|---|
+| kNN accuracy | 0.860 | **0.977** |
+| macro-F1 | 0.791 | **0.954** |
+| intra cosine (frac>0.7) | 0.798 | **0.972** |
+| inter cosine (mean) | 0.103 | **−0.008** |
+| silhouette | 0.374 | **0.703** |
+
+Verified genuine (not leakage): same-capture-excluded kNN = **0.9767**; 1-shot
+accuracy already 0.974; and the held-out **browser** `youtube_video.pcap` (Chrome
+QUIC, never in training) now reads **video_on_demand** (was cloud_gaming).
+Real-source captures: netflix→VOD 99%, spotify→audio 97%, xbox→cloud_gaming 89%.
+
+**12.3 Lessons.** (a) "test accuracy fine, uploads wrong" almost always means a
+train/inference feature inconsistency — diff the two paths' actual tensors. (b)
+Context features (host stats) must be computed over the *same population* at train
+and serve time, or they become an unreproducible leak. (c) A flow-direction fix
+(client = private/local endpoint when no SYN) corrected ~3.7% of mid-stream flows
+but barely moved the score — the host-stats fix was the real lever.
