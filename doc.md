@@ -6,7 +6,7 @@
 
 Net-JEPA is a Joint-Embedding Predictive Architecture for encrypted network traffic
 classification. It learns flow embeddings self-supervised (no labels during pretraining)
-and uses them to classify traffic into 15 application categories across 6 coarse groups.
+and uses them to classify traffic into 8 traffic types.
 
 <p align="center">
   <a href="https://pytorch.org"><img src="https://img.shields.io/badge/PyTorch-EE4C2C?style=flat-square&logo=pytorch&logoColor=white" alt="PyTorch"/></a>
@@ -69,7 +69,7 @@ Net-JEPA/
   Video_Conferencing/ Google_Meet/, MS_Teams/, Zoom/
 ```
 
-- **~67 Wireshark CSV files** across 15 apps in 6 categories (Amazon_Prime
+- **~67 Wireshark CSV files** across many apps across 8 traffic types (Amazon_Prime
   removed — yields 0 flows; `youtube` has only 1 flow → forced into pretrain)
 - Each CSV: `No., Time, Source, Destination, Protocol, Length, Info`
 - Time column: `"2022-06-17 23:48:34.871426"` (datetime string, converted to relative float)
@@ -80,15 +80,14 @@ Net-JEPA/
 Two public datasets were converted to the same Wireshark-CSV schema (via
 `src/netjepa/scripts/convert_vlc_pcap.py`, scapy — no tshark) and added through
 `FOLDER_MAP`. To avoid a **domain confound** (a foreign testbed's artifacts
-leaking into the labelled set), most out-of-domain apps are routed to
-**pretrain-only** via `PRETRAIN_ONLY_FOLDERS`; only the in-distribution-compatible
-MS-Teams captures join the *supervised* set. See `docs/datasets.md` for licenses.
+leaking into the labelled set), out-of-domain apps are folded in via
+`FOLDER_MAP`; the 8-class model trains on all data **supervised**. See `docs/datasets.md` for licenses.
 
 | Source | Apps used | Role |
 |---|---|---|
 | **VLC / Valencia** ([Zenodo 15121418](https://zenodo.org/records/15121418), CC-BY-4.0) | MS Teams → `ms_teams`/video_conferencing | **supervised** (rescued the starved video-conf class, F1 0.67→0.93) |
-| | Netflix / Prime / YouTube / Roblox (`VLC_*`) | **pretrain-only** (representation diversity) |
-| **Cloud-gaming telemetry** ([Kaggle `carloshfm/...`](https://www.kaggle.com/datasets/carloshfm/cloud-gaming-network-telemetry), BSD-3) | Xbox Cloud over 5G → `CG_Xbox`/game_streaming | **pretrain-only** + galaxy density (398→739 points) |
+| | Netflix / Prime / YouTube / Roblox (`VLC_*`) | **supervised** (representation diversity) |
+| **Cloud-gaming telemetry** ([Kaggle `carloshfm/...`](https://www.kaggle.com/datasets/carloshfm/cloud-gaming-network-telemetry), BSD-3) | Xbox Cloud over 5G → `CG_Xbox`/cloud_gaming | **supervised** + galaxy density (398→739 points) |
 
 Huge cloud-gaming pcaps (~1 GB / millions of packets) are capped at parse time
 with `--max_packets 600000`; only the ~5 GB of 5G captures were stream-extracted
@@ -287,11 +286,11 @@ PHASE 3 — Downstream Classification  (50 epochs)
   FREEZE: all encoders, fusion, EMA target
   TRAIN:  DownstreamPoolingB + classifier heads
 
-  Three classifiers (num_classes = 6 categories — the KPI level):
+  Three classifiers (num_categories = 8 traffic types — the KPI level):
     A. k-NN (k=5, cosine)     → knn.joblib  ← loaded by live server
                                 (indexed on the real label distribution)
-    B. Linear probe            Linear(128, 6)
-    C. Shallow MLP             Linear(128,64) → ReLU → Dropout → Linear(64,6)
+    B. Linear probe            Linear(128, 8)
+    C. Shallow MLP             Linear(128,64) → ReLU → Dropout → Linear(64,8)
   CE heads use class-weighted CrossEntropyLoss (inverse-frequency) with
   normal shuffle — NOT balanced sampling (combining both over-corrects and
   collapses the heads onto minority predictions).
@@ -314,13 +313,13 @@ PHASE 3 — Downstream Classification  (50 epochs)
 
 | Benchmark KPI | Target | Result |
 |---|---|---|
-| Intra-class cosine | > 0.7 | **0.81** ✅ |
-| Inter-class cosine | < 0.3 | **0.13** ✅ |
-| Classification accuracy | ≥ 90% | **0.918** (kNN) ✅ |
-| Generalization (few-shot η≥3) | ≥ 85% | **0.91** ✅ |
-| Real-time per flow | < 100 ms | **4.5 ms** ✅ |
+| Intra-class cosine | > 0.7 | **0.94** ✅ |
+| Inter-class cosine | < 0.3 | **−0.01** ✅ |
+| Classification accuracy | ≥ 90% | **0.977** (kNN) ✅ |
+| Generalization (few-shot η≥3) | ≥ 85% | **0.976** ✅ |
+| Real-time per flow | < 100 ms | **4.1 ms** ✅ |
 
-macro-F1 **0.858**, silhouette **0.50**. Reaching the cosine targets needed two
+macro-F1 **0.954**, silhouette **0.70**. Reaching the cosine targets needed two
 things together: (1) **category-level SupCon** — the KPI defines class at the
 category level ("Youtube and Netflix" = intra), so app-level contrast would
 fight it; and (2) **common-mode removal** — SupCon separates class *directions*
@@ -333,7 +332,7 @@ so absolute inter-cosine drops below 0.3 while intra stays above 0.7.
 Two senses of "generalization" are worth separating:
 
 - **In-domain cross-validation** (held-out flows from the same capture, the
-  few-shot eval): **0.92** — comfortably meets the ≥85% KPI.
+  few-shot eval): **0.976** — comfortably meets the ≥85% KPI.
 - **Cross-*dataset* transfer** (train on Kaggle, test on the entirely separate
   VLC/Valencia testbed, never seen — not even in pretraining): **0.05**.
 
@@ -344,9 +343,9 @@ Kaggle-trained model on them.
 
 ```
                        in-domain (Kaggle→Kaggle)   cross-domain (Kaggle→VLC)
-  kNN accuracy                 0.918                       0.054
-  macro-F1                     0.858                       0.037
-  silhouette                   0.50                        0.02
+  kNN accuracy                 0.977                       0.054
+  macro-F1                     0.954                       0.037
+  silhouette                   0.70                        0.02
 ```
 
 The Kaggle-trained embedding does **not** transfer across capture domains —
@@ -381,7 +380,7 @@ Measured on held-out VLC (k = labelled VLC flows per category added to the kNN):
 
 - **Unsupervised DANN aligns the domains** (discriminator acc 0.65 → 0.51) **but
   doesn't improve transfer alone** — a known limitation under *label shift* (VLC
-  has 3 of 6 categories: aligning p(x) ≠ aligning p(category|x)).
+  has 3 of 8 traffic types: aligning p(x) ≠ aligning p(category|x)).
 - **Semi-supervised** (DANN + a few target labels) **does**: transfer rises
   0.05 → 0.39 and beats the baseline for k≥10 — the alignment makes the space
   amenable to cheap few-shot target adaptation. VLC stays a hard target (0.39,
@@ -421,7 +420,8 @@ Measured on held-out VLC (k = labelled VLC flows per category added to the kNN):
                                       ▼
                          webui/  ("Signal Atlas" — React 19 + WebGL)
                          ┌──────────────────────────────┐
-                         │  • Galaxy of 7,481 real flows │
+                         │  • Galaxy of thousands of     │
+                         │    real flows                 │
                          │    (regl/WebGL, UMAP layout,  │
                          │     coloured by true class)   │
                          │  • Click a star → packet      │

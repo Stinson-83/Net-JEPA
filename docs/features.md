@@ -5,13 +5,13 @@ both technical and non-technical judges *feel* what the model does in the first 
 Everything below runs in the browser (React 19 + WebGL via regl) and works **fully offline**
 off a committed static export, or **live** against the FastAPI inference server.
 
-## 7.1 The galaxy — 7,481 real flows you can fly through
+## 7.1 The galaxy — thousands of real flows you can fly through
 
 The centrepiece. Every encrypted flow the model has ever seen is a star, positioned by its
 128-D embedding projected to 2-D (UMAP) and **coloured by its true category**. Same-category
-flows cluster into six visibly distinct constellations — *the cosine KPI made literal*.
+flows cluster into visibly distinct constellations — *the cosine KPI made literal*.
 
-- **Drag to orbit, scroll to zoom** — a real camera over a real point cloud (7,481 points).
+- **Drag to orbit, scroll to zoom** — a real camera over a real point cloud (thousands of points).
 - Point size adapts to zoom; percentile-bounded layout keeps every cluster on-screen.
 - The galaxy is **balanced and dense** — built from real captures (cloud-gaming and MS-Teams
   data folded in), capped at 1,500/class for a fair view, never mocked.

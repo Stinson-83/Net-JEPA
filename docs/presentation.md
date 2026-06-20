@@ -29,7 +29,7 @@ has a visibly different **rhythm**.
 ### Slide 4 — The approach: a JEPA
 
 One clean diagram: online branch sees a *degraded* flow, predicts the *latent* of the clean
-flow produced by an EMA target. VICReg, no labels, no negatives. Self-supervised on ~18k flows.
+flow produced by an EMA target. VICReg, no labels, no negatives. Self-supervised on ~20k flows.
 
 > "It learns the structure of traffic on its own — before it ever sees a label."
 
@@ -47,17 +47,19 @@ The five-KPI table, all ✅:
 
 | KPI | Target | Net-JEPA |
 |---|---|---|
-| Intra cosine | >0.7 | **0.81** |
-| Inter cosine | <0.3 | **0.14** |
-| Accuracy | ≥90% | **92.4%** |
-| Generalization | ≥85% | **92%** |
-| Latency | <100 ms | **4.5 ms** (CPU) |
+| Intra cosine | >0.7 | **0.94** |
+| Inter cosine | <0.3 | **−0.01** |
+| Accuracy | ≥90% | **97.7%** |
+| Generalization (η=7) | ≥85% | **97.6%** |
+| Latency | <100 ms | **4.1 ms** (CPU) |
 
-macro-F1 **0.90**. Runs on CPU.
+macro-F1 **0.954** · silhouette **0.70** · 8 traffic types. Runs on CPU. The jump from 0.86
+came from one fix — per-capture host stats (train/inference-consistent), which also made
+real-`.pcap` upload classify correctly.
 
 ### Slide 7 — **Live demo** (the centrepiece)
 
-Switch to the **Signal Atlas**. Fly the galaxy of 7,481 real flows. Click a star → packet
+Switch to the **Signal Atlas**. Fly the galaxy of thousands of real flows. Click a star → packet
 heartbeat + verdict + neighbours. **Drop a `.pcap`** → watch the pipeline stream stage-by-stage
 and the new flow land in its constellation. (Fallback: a "simulate" chip.)
 

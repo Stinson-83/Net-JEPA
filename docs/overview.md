@@ -25,43 +25,48 @@ Net-JEPA is a **Joint-Embedding Predictive Architecture (JEPA)** for network flo
 flow's first 64 packets it builds a `(64×9)` feature matrix (size, log-IAT, signed
 direction, protocol one-hot, RTT) plus a 15-D flow-context vector. A Transformer encoder
 learns **self-supervised** by predicting masked parts of a flow against a slow-moving EMA
-"target" copy of itself (VICReg loss — no labels, no negatives). A short supervised
-**contrastive** fine-tune (SupCon) on the 6 coarse categories, plus a **common-mode
+"target" copy of itself (VICReg loss — no labels, no negatives). A supervised
+**contrastive** fine-tune (SupCon) on the 8 traffic types, plus a **common-mode
 removal** (α-centering) trick, shapes a 128-D unit-sphere embedding where same-class flows
 point together and different-class flows are nearly orthogonal. A cosine **k-NN** then
-classifies in ~4.5 ms on CPU.
+classifies in ~4.1 ms on CPU.
 
-## The six categories
+## The eight traffic types
 
-| Category | Apps | Packet signature |
+| Traffic type | Apps / sources | Packet signature |
 |---|---|---|
+| 🎵 Audio Streaming | Spotify | Thin steady downstream, low rate |
 | ☁️ Cloud Gaming | GeForce NOW, KT GameBox, Xbox Cloud | Fat steady downstream, trickle of control up |
 | 📡 Live Streaming | YouTube Live, AfreecaTV, Naver NOW | Sustained downstream in tight bursts |
 | 🧊 Metaverse / XR | Roblox, Zepeto | Chatty bidirectional small-packet storms |
-| 🎮 Online Gaming | PUBG, Teamfight Tactics | Rapid tiny UDP datagrams, latency-first |
-| 🎬 On-Demand Video | Netflix, Prime, YouTube | Big chunked bursts then long silences |
+| 🎮 Online Gaming | PUBG/Battleground, Teamfight Tactics | Rapid tiny UDP datagrams, latency-first |
 | 🎥 Video Conferencing | Zoom, Teams, Meet | Symmetric real-time; jitter-sensitive |
+| 🎬 Video on Demand | Netflix, Prime, YouTube | Big chunked bursts then long silences |
+| 🌐 Web Browsing | general web | Bursty request/response to many hosts |
 
 ## KPIs — all met
 
 | Benchmark KPI | Target | Achieved | How |
 |---|---|---|---|
-| Intra-class cosine | > 0.7 | **0.81** | Category SupCon on a kept, normalised embedding |
-| Inter-class cosine | < 0.3 | **0.14** | α-centering removes the anisotropic common-mode |
-| Accuracy | ≥ 90% | **92.4%** | Cosine k-NN on the isotropised embedding |
-| Generalization | ≥ 85% | **92%** | Few-shot cross-validation (held-out flows) |
-| Real-time | < 100 ms | **4.5 ms** (CPU) | Lightweight encoder, no GPU needed to serve |
+| Intra-class cosine | > 0.7 | **0.94** | Type SupCon on a kept, normalised embedding |
+| Inter-class cosine | < 0.3 | **−0.01** | α-centering removes the anisotropic common-mode |
+| Accuracy | ≥ 90% | **97.7%** | Cosine k-NN on the isotropised embedding |
+| Generalization | ≥ 85% | **97.6%** | Few-shot (η=7, held-out flows) |
+| Real-time | < 100 ms | **4.1 ms** (CPU) | Lightweight encoder, no GPU needed to serve |
 
-Plus **macro-F1 0.90**. See [results.md](results.md) for per-class numbers and the honest
-cross-*dataset* generalization story (a deliberately reported limitation).
+Plus **macro-F1 0.954** and silhouette **0.70**. See [results.md](results.md) for per-class
+numbers, the per-capture-host-stats fix that drove them, and real-`.pcap` inference results.
 
 ## What makes it stand out
 
 - **No decryption, ever** — only packet metadata is used.
-- **Self-supervised first** — learns from ~18k unlabelled flows before any labels.
+- **Self-supervised first** — learns from ~20k unlabelled flows before any labels.
 - **Hits every KPI**, including the hard cosine targets that naïve approaches miss.
-- **Honest evaluation** — we report where it *fails* (cross-domain transfer) and the
-  domain-adaptation fix, rather than hiding it.
-- **Runs in real time on CPU** — ~4.5 ms/flow, deployable at the edge.
-- **A demo judges can *play* with** — a live "atlas" of 7,481 real flows; drop in a `.pcap`
-  and watch the model classify it. See [features.md](features.md).
+- **Upload-any-`.pcap` actually works** — the same flow/feature pipeline runs at training and
+  inference (incl. per-capture host stats), so a raw browser YouTube capture correctly reads
+  `video_on_demand`. See [results.md §5.5](results.md).
+- **Honest evaluation** — we report the one weak spot (single-flow snippets) rather than
+  hiding it.
+- **Runs in real time on CPU** — ~4.1 ms/flow, deployable at the edge.
+- **A demo judges can *play* with** — a live "atlas" of real flows; drop in a `.pcap` and
+  watch the model classify it. See [features.md](features.md).

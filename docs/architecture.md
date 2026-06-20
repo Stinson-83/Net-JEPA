@@ -12,14 +12,17 @@ Raw network captures (`.pcap` or Wireshark CSV) flow through four stages before 
 model sees any data:
 
 1. **Parse** — extract ports, TCP flags (SYN/ACK/FIN/RST), and TLS Client/Server Hello markers.
-2. **Bidirectional flow grouping** — canonical 5-tuple key; 30 s idle split; flows kept at ≥ 5 and ≤ 64 packets.
+2. **Bidirectional flow grouping** — canonical 5-tuple key; 30 s idle split; flows kept at ≥ 5 and ≤ 64 packets. The client/device is the SYN initiator, else the **private/local endpoint**, else the first packet's source (so direction is correct on real mid-stream captures).
 3. **RTT extraction** — TCP handshake → TLS handshake → first-exchange fallback.
-4. **Feature tensors**
+4. **Per-capture host stats** — `n_dst_ips / n_dst_ports / n_src_ports / conn_per_sec` are computed **per capture** (per `source_file` at train time, per uploaded pcap at inference). This keeps the host-behaviour features both discriminative and identical between training and serving — the fix that took accuracy 0.86 → 0.977 (see [results.md §5.3](results.md)).
+5. **Feature tensors**
    - `packet_sequence` **(64 × 9)**: `[size/1500, log1p(IAT), signed direction, proto one-hot×4, rtt_norm, rtt_flag]`
-   - `flow_context` **(15,)**: proto, durations, IAT stats, SYN/FIN/RST ratios, pkts/s, per-host stats, packet count, RTT
+   - `flow_context` **(15,)**: proto, durations, IAT stats, SYN/FIN/RST ratios, pkts/s, per-capture host stats, packet count, RTT
    - `padding_mask` **(64,)**: real packet vs. zero-padding
 
-`min_packets`, `max_packets`, `flow_timeout` are all config-driven (`src/netjepa/configs/default.yaml`).
+The exact same parse→flow→features code runs on Kaggle CSVs, converted VLC/CG captures, and
+uploaded `.pcap`s. `min_packets`, `max_packets`, `flow_timeout` are config-driven
+(`src/netjepa/configs/default.yaml`; the 8-class build uses `traffic.yaml`).
 
 ---
 
@@ -51,14 +54,14 @@ The downstream embedding is the part the cosine KPI measures, so it gets special
 1. **Attention pooling** collapses the 64 packet latents into one flow vector, concatenated
    with the raw 15-D context → 143-D.
 2. **`embed_head`** MLP (143→256→128) → **L2-normalise** → a point on the unit sphere.
-3. **Category SupCon** (Phase 2b) trains this embedding so same-*category* flows point
-   together. Crucially supervised at the **category** level — "YouTube and Netflix" are the
-   same class — because the KPI defines class that way.
+3. **Category SupCon** (Phase 2b) trains this embedding so same-*type* flows point
+   together. Supervised at the **traffic-type** level (one of 8 types — "YouTube and Netflix"
+   are both `video_on_demand`).
 4. **α-centering** (`set_centering`, α≈0.65): SupCon separates class *directions* but leaves
    them in a shared cone (high absolute cosine). Subtracting α·mean and re-normalising
-   isotropises the space, dropping inter-class cosine below 0.3 while intra stays above 0.7.
+   isotropises the space, dropping inter-class cosine to ≈ −0.01 while intra stays ≈ 0.94.
 
-Classification is a **cosine k-NN (k=5)** over the labelled embeddings — ~4.5 ms on CPU.
+Classification is a **cosine k-NN (k=5)** over the labelled embeddings — ~4.1 ms on CPU.
 
 ---
 
@@ -68,8 +71,8 @@ Classification is a **cosine k-NN (k=5)** over the labelled embeddings — ~4.5 
 
 | Phase | Data | What it does |
 |---|---|---|
-| **1 — Pretrain** (150 ep) | ~18k flows, **labels ignored** | Self-supervised JEPA (VICReg + masking + EMA) |
-| **2b — SupCon** (120 ep) | downstream train (labelled) | Category contrastive on the kept embedding + α-centering. Init from Phase 1. |
+| **1 — Pretrain** (150 ep) | ~20k flows, **labels ignored** | Self-supervised JEPA (VICReg + masking + EMA) |
+| **2b — SupCon** (120 ep) | downstream train (labelled, 8 types) | Traffic-type contrastive on the kept embedding + α-centering. Init from Phase 1. |
 | **3 — Heads** (50 ep) | downstream train | Freeze encoder; fit k-NN + class-weighted linear/MLP heads; save `knn.joblib` |
 | *2c — DANN* (optional) | + unlabelled target | Domain-adversarial adaptation for cross-domain transfer |
 
@@ -82,13 +85,19 @@ recommended path; it didn't help separation.)
 
 ```
   .pcap upload ─► src/server/app.py (FastAPI)
-                    PcapReplay → FlowTable → NetJEPAClassifier.predict()
-                    → forward_downstream → cosine k-NN → category + confidence
+                    pcap_to_flows (scapy → flow_builder.extract_flows, same as training)
+                    → compute_src_host_stats over THIS pcap (per-capture)
+                    → NetJEPAClassifier.predict_flow → forward_downstream
+                    → cosine k-NN → traffic type + confidence
                     → UMAP.transform → 2-D point appended to the growing cloud
                   every stage streamed over /ws  ──►  webui animates it live
   GET /api/cloud   reference cloud + everything inferred so far
   GET /api/metrics KPIs / per-class stats
 ```
+
+The terminal tool `infer_pcap.py` uses the identical path and additionally prints
+flow-count / packet-weighted / confidence-filtered summaries and the **dominant traffic
+type by packets**.
 
 The web UI ("Signal Atlas") reads a static export when the server is down and the live
 server when it's up — see [features.md](features.md) and [usage.md](usage.md).

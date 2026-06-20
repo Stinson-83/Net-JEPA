@@ -37,7 +37,7 @@ CPU. Versions are pinned in `requirements.txt` (Python) and `webui/package.json`
 | **Vite** | Build tooling / dev server | https://vite.dev |
 | **TypeScript** | Type-safe front-end | https://www.typescriptlang.org |
 | **Tailwind CSS 4** | Design system / styling | https://tailwindcss.com |
-| **regl** | WebGL renderer for the 7,481-point flow galaxy | https://github.com/regl-project/regl |
+| **regl** | WebGL renderer for the real-flow galaxy | https://github.com/regl-project/regl |
 | **Zustand** | Lightweight state management | https://github.com/pmndrs/zustand |
 | **clsx** | Conditional class names | https://github.com/lukeed/clsx |
 | ESLint, typescript-eslint | Linting | https://eslint.org |
@@ -58,6 +58,6 @@ JetBrains Mono (Google Fonts).
 
 ## 4.5 Why this stack
 
-- **CPU-first, edge-deployable** — PyTorch model is tiny; serving needs no GPU (~4.5 ms/flow).
+- **CPU-first, edge-deployable** — PyTorch model is tiny; serving needs no GPU (~4.1 ms/flow).
 - **No vendor lock-in** — every component is permissively licensed OSS.
 - **Reproducible** — one `requirements.txt`, one `npm install`, deterministic seeds.

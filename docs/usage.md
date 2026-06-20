@@ -51,7 +51,8 @@ python src/netjepa/scripts/fetch_assets.py            # weights (HF) + data (Kag
 
 ```bash
 python src/netjepa/scripts/fetch_assets.py                                    # weights + data
-python src/netjepa/scripts/evaluate.py --checkpoint checkpoints/phase3/final.pt
+python -m netjepa.scripts.evaluate --config src/netjepa/configs/traffic.yaml \
+    --checkpoint checkpoints/traffic8/phase3/final.pt
 #   → prints the KPI summary: intra/inter cosine, kNN accuracy, few-shot, latency
 ```
 
@@ -81,38 +82,54 @@ works **fully offline** off the committed static export.
 **Kiosk / demo deep-links:** `?skipintro` jumps straight to the Atlas; `?scene=proof`
 (or `model` / `journey`) opens a specific scene; keys `1–4` switch scenes.
 
-## 6.4 Train from scratch (Way 2)
+## 6.4 Train from scratch (Way 2) — the 8-traffic-type model
 
-Shortcut for steps 2–5 below: **`make train DEVICE=cuda`** (run `make fetch` first for the data).
+Shortcut: **`make train DEVICE=cuda`** (run `make fetch-data` first). The 8-class pipeline uses
+`src/netjepa/configs/traffic.yaml` (sets `processed_dir=data/processed_traffic`,
+`num_categories=8`) and writes to `checkpoints/traffic8/`.
 
 ```bash
-# 1. Get the raw 5G data → parquet. Fetch from Kaggle automatically …
-python src/netjepa/scripts/fetch_assets.py --data-only
-#    …to match the PUBLISHED checkpoint exactly, also fold in VLC + cloud-gaming
-#    (LARGE; or '--foldin-apps teams' for just the video-conf boost, ~2.6 GB):
-#    python src/netjepa/scripts/fetch_assets.py --data-only --with-foldins
-#    …or, if you already have the raw 5G CSVs locally:
-#    python src/netjepa/scripts/preprocess_kaggle.py --raw_dir <path-to-5G_Traffic_Datasets>
+CFG=src/netjepa/configs/traffic.yaml
 
-# 2. Phase 1 — self-supervised pretraining (~15–25 min on GPU)
-python src/netjepa/scripts/train_phase1.py  --device cuda
+# 1. Stage raw data (Kaggle 5G + VLC + cloud-gaming) then BUILD the 8-class dataset.
+python src/netjepa/scripts/fetch_assets.py --data-only --with-foldins   # stage raw captures
+python -m netjepa.scripts.build_traffic_dataset \
+    --raw_dir <5G_dataset_root> \
+    --csv_out data/traffic_csvs --parquet_out data/processed_traffic
+#    → per-type CSVs + {pretrain,downstream_train,test,fewshot_eta*}.parquet + labels.json
+#      (host stats computed PER capture — see datasets.md §3.3)
 
-# 3. Phase 2b — category SupCon + α-centering (recommended; inits from Phase 1)
-python src/netjepa/scripts/train_phase2b.py --device cuda
+# 2. Phase 1 — self-supervised pretraining (~15 min on GPU)
+python -m netjepa.scripts.train_phase1  --config $CFG --ckpt_dir checkpoints/traffic8/phase1 --device cuda
 
-# 4. Phase 3 — heads + k-NN (saves knn.joblib); defaults to Phase 2b checkpoint
-python src/netjepa/scripts/train_phase3.py  --device cuda
+# 3. Phase 2b — traffic-type SupCon + α-centering (inits from Phase 1)
+python -m netjepa.scripts.train_phase2b --config $CFG \
+    --init_ckpt checkpoints/traffic8/phase1/final.pt --ckpt_dir checkpoints/traffic8/phase2b --device cuda
 
-# 5. Evaluate against the test split
-python src/netjepa/scripts/evaluate.py --checkpoint checkpoints/phase3/final.pt --device cuda
+# 4. Phase 3 — heads + k-NN (saves knn.joblib)
+python -m netjepa.scripts.train_phase3  --config $CFG \
+    --phase2_ckpt checkpoints/traffic8/phase2b/final.pt --ckpt_dir checkpoints/traffic8/phase3 --device cuda
 
-# 6a. Export metrics + reducer for the UI
-python src/netjepa/scripts/export_artifacts.py --checkpoint checkpoints/phase3/final.pt \
-    --dataset-id phase3b_supcon --name "Phase 3b" --device cuda
+# 5. Evaluate against the test split  → kNN ~0.977, macro-F1 ~0.954, all KPIs
+python -m netjepa.scripts.evaluate --config $CFG \
+    --checkpoint checkpoints/traffic8/phase3/final.pt --device cuda
 
-# 6b. Export the dense, balanced galaxy cloud (full real set, capped per class)
-python src/netjepa/scripts/export_cloud.py --checkpoint checkpoints/phase3/final.pt \
-    --dataset-id phase3b_supcon --cap 1500 --device cuda
+# 6. Export metrics + reducer + galaxy cloud for the UI
+python -m netjepa.scripts.export_artifacts --config $CFG \
+    --checkpoint checkpoints/traffic8/phase3/final.pt --dataset-id traffic8 --name "Traffic-8" --device cuda
+python -m netjepa.scripts.export_cloud --config $CFG \
+    --checkpoint checkpoints/traffic8/phase3/final.pt --dataset-id traffic8 --cap 1500 --device cuda
+```
+
+### Classify a raw `.pcap` from the terminal
+
+```bash
+python -m netjepa.scripts.infer_pcap /path/to/capture.pcap \
+    --checkpoint checkpoints/traffic8/phase3/final.pt \
+    --labels data/processed_traffic/labels.json
+#   → per-flow predictions + flow-count / packet-weighted / confidence summaries
+#     + the DOMINANT traffic type by packets (the headline read on a capture)
+#   (or:  make infer PCAP=/path/to/capture.pcap )
 ```
 
 ### Optional — fold in a new dataset
@@ -169,8 +186,9 @@ URL into the top-level README ("Models Published") and [tech-stack.md §4.4](tec
 
 | Variable | Default | Description |
 |---|---|---|
-| `NETJEPA_CKPT` | `checkpoints/phase3/final.pt` | Trained checkpoint |
-| `DATASET_ID` | `phase3b_supcon` | Export dir under `webui/public/data` (cloud + reducer + metrics) |
+| `NETJEPA_CKPT` | `checkpoints/traffic8/phase3/final.pt` | Trained 8-class checkpoint |
+| `NETJEPA_LABELS` | `data/processed_traffic/labels.json` | the 8 traffic-type names |
+| `DATASET_ID` | `traffic8` | Export dir under `webui/public/data` (cloud + reducer + metrics) |
 | `KNN_PATH` | auto-detected | `knn.joblib` next to the checkpoint |
 | `NETJEPA_HF_REPO` | `kritikahd007/net-jepa` | HF repo the server auto-downloads weights from if the checkpoint is missing |
 | `VITE_PROXY_TARGET` (web) | `http://localhost:8000` | inference server the Vite proxy forwards `/api`+`/ws` to; `make demo` sets it to `:$(PORT)` |
@@ -195,7 +213,8 @@ evaluation/inference are fine on CPU). `make help` lists every shortcut.
 make reproduce
 # — or explicitly —
 python src/netjepa/scripts/fetch_assets.py                                      # weights (HF) + data (Kaggle→preprocess)
-python src/netjepa/scripts/evaluate.py --checkpoint checkpoints/phase3/final.pt --device cpu
+python -m netjepa.scripts.evaluate --config src/netjepa/configs/traffic.yaml \
+    --checkpoint checkpoints/traffic8/phase3/final.pt --device cpu
 ```
 Add `--with-foldins` to `fetch_assets.py` to match the published checkpoint exactly.
 
@@ -215,26 +234,23 @@ auto-downloads the weights from HF if you skip the fetch step.)
 ```bash
 python src/netjepa/scripts/fetch_assets.py --data-only         # data from Kaggle (training needs no weights)
 #   add --with-foldins to match the published config exactly
-make train DEVICE=cuda                                         # phase1 → phase2b → phase3 → evaluate
-# — or explicitly —
-python src/netjepa/scripts/train_phase1.py  --device cuda
-python src/netjepa/scripts/train_phase2b.py --device cuda
-python src/netjepa/scripts/train_phase3.py  --device cuda
-python src/netjepa/scripts/evaluate.py --checkpoint checkpoints/phase3/final.pt --device cuda
+make train DEVICE=cuda                                         # build 8-class data → phase1→2b→3 → evaluate
+# — or explicitly: see §6.4 (build_traffic_dataset + traffic.yaml + checkpoints/traffic8) —
 ```
 The dataset comes from **Kaggle**, not HF — we don't republish it (license "Unknown").
 
-### 4 · No downloads — preprocess local raw data, train from scratch, evaluate
+### 4 · No downloads — build from local raw data, train from scratch, evaluate
 
 ```bash
-python src/netjepa/scripts/preprocess_kaggle.py --raw_dir <path-to-5G_Traffic_Datasets> --out_dir data/processed
-python src/netjepa/scripts/train_phase1.py  --device cuda
-python src/netjepa/scripts/train_phase2b.py --device cuda
-python src/netjepa/scripts/train_phase3.py  --device cuda
-python src/netjepa/scripts/evaluate.py --checkpoint checkpoints/phase3/final.pt --device cuda
+CFG=src/netjepa/configs/traffic.yaml
+python -m netjepa.scripts.build_traffic_dataset --raw_dir <path-to-5G_Traffic_Datasets> \
+    --csv_out data/traffic_csvs --parquet_out data/processed_traffic
+python -m netjepa.scripts.train_phase1  --config $CFG --ckpt_dir checkpoints/traffic8/phase1 --device cuda
+python -m netjepa.scripts.train_phase2b --config $CFG --init_ckpt checkpoints/traffic8/phase1/final.pt --ckpt_dir checkpoints/traffic8/phase2b --device cuda
+python -m netjepa.scripts.train_phase3  --config $CFG --phase2_ckpt checkpoints/traffic8/phase2b/final.pt --ckpt_dir checkpoints/traffic8/phase3 --device cuda
+python -m netjepa.scripts.evaluate --config $CFG --checkpoint checkpoints/traffic8/phase3/final.pt --device cuda
 ```
-`--raw_dir` points at your folder containing `GeForce_Now/`, `MS_Teams/`, … (defaults to the
-path in `default.yaml` if omitted).
+`--raw_dir` points at your folder containing `GeForce_Now/`, `MS_Teams/`, `VLC_*/`, `CG_Xbox/`, …
 
 ### 5 · Run the frontend / UI (one command)
 

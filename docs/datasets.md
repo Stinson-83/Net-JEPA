@@ -1,88 +1,116 @@
 # 3 · Datasets
 
-All datasets used are **public** and **permissively licensed**. No data was fabricated;
-the unevenness in the cloud reflects real-world capture sizes.
+All datasets used are **public**. No data was fabricated; the unevenness in the cloud
+reflects real-world capture sizes.
 
-## 3.1 Primary — 5G Traffic Dataset (Korea)
+## 3.1 What the model is trained on — 8 common traffic types
 
-- **Source:** [Kaggle · 5G Traffic Datasets](https://www.kaggle.com/datasets/kimdaegyeom/5g-traffic-datasets) (`kimdaegyeom/5g-traffic-datasets`); original on [IEEE DataPort](https://ieee-dataport.org/documents/5g-traffic-datasets) (Choi, Kim, Ko — Kwangwoon University; DOI `10.21227/ewhk-n061`).
-- **License:** **listed as "Unknown" on Kaggle** (and no explicit open license on IEEE DataPort). We therefore **use it from the source under Kaggle's terms but do not redistribute it or any derivative** — `fetch_assets.py` pulls it from Kaggle and preprocesses locally (see §3.7).
-- **Format:** Wireshark CSV exports (`No., Time, Source, Destination, Protocol, Length, Info`)
-- **Scope:** 15 apps across the 6 categories, captured on 5G.
-- **Role:** the core training + test set. ~22,900 flows after flow-building (≥5 packets).
+The current model classifies **8 common traffic types**, each built from one or more public
+sources. Unlike the earlier 6-category model, **every traffic type is fully supervised** (no
+pretrain-only routing): each type becomes one labelled CSV and is used in Phase 1, Phase 2b
+and Phase 3 under a single leak-free split.
 
-Per-app folders map to `(app, category)` in `src/netjepa/data/preprocess.py::FOLDER_MAP`.
+| Traffic type | Source folders → type (`build_traffic_dataset.py::FOLDER_TO_TYPE`) | flows |
+|---|---|---|
+| `audio_streaming` | VLC_Spotify | 2,396 |
+| `cloud_gaming` | GeForce_Now, KT_GameBox (Kaggle) · CG_Xbox (cloud-gaming telemetry) | 739 |
+| `live_streaming` | AfreecaTV, Naver_NOW, YouTube_Live (Kaggle) | 2,449 |
+| `metaverse` | Roblox, Zepeto (Kaggle) · VLC_Roblox (VLC) | 10,482 |
+| `online_gaming` | Battleground, Teamfight_Tactics (Kaggle) | 5,774 |
+| `video_conferencing` | Google_Meet, MS_Teams, Zoom (Kaggle) · VLC_Teams (VLC) | 742 |
+| `video_on_demand` | Netflix, YouTube (Kaggle) · VLC_Netflix, VLC_Prime, VLC_YouTube (VLC) | 3,287 |
+| `web_browsing` | VLC_Web | 3,023 |
 
-## 3.2 Augmentation — VLC / Valencia dataset
+**Total: 28,892 flows** → split leak-free into **20,224 pretrain / 4,333 downstream-train /
+4,335 test** (stratified 70/15/15; classes with <4 flows go to pretrain).
 
-- **Source:** [Zenodo · VLC Data](https://zenodo.org/records/15121418) — *"A Novel Flow-Based
-  Online Network Traffic Classification"* — **CC-BY-4.0**
-- **Format:** raw `.pcapng` (58 files); we convert to Wireshark CSV with a scapy-based
-  converter (`src/netjepa/scripts/convert_vlc_pcap.py` — no Wireshark/tshark needed).
-- **What we used:**
-  - **MS Teams** (6 files) → `ms_teams` / video_conferencing — **supervised** (boosts the
-    starved video-conf class).
-  - **Netflix / Prime / YouTube / Roblox** → **pretrain-only** (out-of-domain testbed; used
-    for representation diversity but *not* the labelled set, to avoid a domain confound).
+## 3.2 The three sources
 
-## 3.3 Augmentation — Cloud-gaming telemetry
+**Primary — 5G Traffic Dataset (Korea).** [Kaggle ·
+5g-traffic-datasets](https://www.kaggle.com/datasets/kimdaegyeom/5g-traffic-datasets)
+(`kimdaegyeom/5g-traffic-datasets`); original on
+[IEEE DataPort](https://ieee-dataport.org/documents/5g-traffic-datasets) (Choi, Kim, Ko —
+Kwangwoon University; DOI `10.21227/ewhk-n061`). License **listed as "Unknown" on Kaggle** →
+we **use it under Kaggle's terms but do not redistribute it or any derivative**. Format:
+Wireshark CSV (`No., Time, Source, Destination, Protocol, Length, Info`).
 
-- **Source:** [Kaggle · Cloud Gaming Network Telemetry](https://www.kaggle.com/datasets/carloshfm/cloud-gaming-network-telemetry)
-  (`carloshfm/cloud-gaming-network-telemetry`) — companion to the
-  [dcomp-leris GitHub repo](https://github.com/dcomp-leris/VR-AR-CG-network-telemetry) — **BSD-3**
-- **Format:** raw `.pcap` (Xbox Cloud Gaming over **5G** — Fortnite / Forza / Mortal Kombat).
-- **What we used:** the 5 **5G** captures → `CG_Xbox` / game_streaming — **pretrain-only**
-  (cross-testbed). We stream-extracted just the 5G subset (~5 GB of the 28 GB record).
+**VLC / Valencia dataset.** [Zenodo · record 15121418](https://zenodo.org/records/15121418) —
+**CC-BY-4.0**. Raw `.pcapng` (58 files) converted to Wireshark CSV by a scapy-based converter
+(`src/netjepa/scripts/convert_vlc_pcap.py` — no Wireshark/tshark needed). We use the **full**
+VLC set incl. Spotify (→ audio_streaming) and Web (→ web_browsing), plus Netflix/Prime/YouTube
+(→ VOD), Roblox (→ metaverse), Teams (→ video_conferencing).
 
-## 3.4 The pretrain-only vs supervised decision
+**Cloud-gaming telemetry.** [Kaggle ·
+cloud-gaming-network-telemetry](https://www.kaggle.com/datasets/carloshfm/cloud-gaming-network-telemetry)
+— **BSD-3**. Raw `.pcap` (Xbox Cloud Gaming over 5G). The 5G captures → `CG_Xbox` →
+cloud_gaming.
 
-Folding *all* of an out-of-domain dataset into the **labelled** set caused a **domain
-confound** — the model learned testbed artifacts and confused VLC-Teams with VLC-Netflix.
-The fix, encoded in `PRETRAIN_ONLY_FOLDERS`, routes out-of-domain apps to **Phase-1
-pretraining only**, while in-distribution-compatible additions (Teams) join the supervised
-set. This is the "VLC/cloud-gaming as pretraining augmentation + a targeted supervised
-boost" pattern.
+## 3.3 How the dataset is preprocessed (`build_traffic_dataset.py`)
 
-## 3.5 How the additions paid off (real flows, real gains)
+One script builds everything, identically for Kaggle CSVs and VLC/CG captures:
 
-| Class | Galaxy points before | after | Model F1 before → after |
-|---|---|---|---|
-| game_streaming | 398 | **739** | 0.72 → 0.71 (galaxy density was the goal) |
-| video_conferencing | 510 | **742** | 0.67 → **0.93** |
+1. **Parse → packet schema.** Kaggle CSVs via `parser.parse_csv`; VLC/CG raw captures are
+   first converted to the same CSV schema by `convert_vlc_pcap.py` (scapy). Both yield the
+   columns `time, src_ip, dst_ip, src_port, dst_port, protocol_id, length, is_syn/ack/fin/
+   rst/syn_ack, is_client_hello/server_hello`.
+2. **Build flows** (`flow_builder.extract_flows`): bidirectional 5-tuple
+   (`frozenset{(src_ip,src_port),(dst_ip,dst_port)} + protocol`), 30 s idle split, keep flows
+   with **5–64 packets**. The client/device is the SYN initiator, else the **private/local
+   endpoint**, else the first packet's source.
+3. **RTT** via `rtt.extract_rtt` (first client→server→client exchange).
+4. **Host stats — per capture.** `compute_src_host_stats` is run **per `source_file`**
+   (one app session), *not* globally. This is the fix that made host-behaviour features
+   (`n_dst_ips`, `n_dst_ports`, `n_src_ports`, `conn_per_sec`) both discriminative and
+   reproducible at inference (a single uploaded pcap reproduces the same per-capture stats).
+   See `docs/results.md §5.3`.
+5. **Features** (`features.py`): each flow → a 64×9 `packet_sequence` (size/1500,
+   log1p(iat)/10, signed direction, protocol one-hot×4, rtt_norm, rtt_flag) + a 15-D
+   `flow_context` (durations, flag ratios, per-capture host stats) + `padding_mask`.
+6. **Leak-free split** (stratified 70/15/15 by class; `split` column recorded) and write:
+   - `data/traffic_csvs/<type>.csv` — one row per flow with raw arrays (`packet_sizes`,
+     `iats`, `directions`) + scalars + `app` reference col + `split` col (human-readable).
+   - `data/processed_traffic/{pretrain,downstream_train,test,fewshot_eta*}.parquet` — the
+     tensors the trainer consumes, + `labels.json` (the 8 type names + `type2id`).
 
-Total galaxy: **7,481** real flows, capped at 1,500/class for a balanced view (the Proof
-dashboard still reports the full, true distribution on the test split).
+Both `data/traffic_csvs/` and `data/processed_traffic/` are **gitignored** (Kaggle-derived;
+rebuilt from source on demand).
 
-## 3.6 Reproducing the fold-in
+## 3.4 How a raw `.pcap` is processed at inference (identical path)
 
-**Automated (recommended).** `fetch_assets.py --with-foldins` downloads the VLC apps from
-Zenodo (filtered) + the cloud-gaming captures from Kaggle, converts them, and stages them with
-the 5G base for a single preprocess pass:
+Uploading a `.pcap` (terminal `infer_pcap.py` or the server `/api/infer`) uses the **same**
+flow-building and feature code as training — this is what makes the trained classes transfer:
 
-```bash
-# exact published config (LARGE: VLC ≈23 GB + cloud-gaming ≈28 GB)
-python src/netjepa/scripts/fetch_assets.py --data-only --with-foldins
-# …or just the high-value MS-Teams boost (≈2.6 GB), no cloud-gaming:
-python src/netjepa/scripts/fetch_assets.py --data-only --with-foldins --foldin-apps teams
+```
+pcap → scapy parse → packet schema (flags + TLS hellos recovered)
+     → flow_builder.extract_flows (same 5-tuple / 30 s / 5–64 pkts)
+     → compute_src_host_stats over THIS pcap's flows (per-capture, matches training)
+     → features.py (same 64×9 packet_sequence + 15-D flow_context)
+     → encoder.forward_downstream → 128-D embedding → cosine k-NN → type + confidence
 ```
 
-**Manual (lower level).** Convert raw captures yourself, then preprocess:
+`infer_pcap.py` reports per-flow predictions plus three summaries — flow counts,
+**packet-weighted** (big flows dominate), confidence-filtered — and the **dominant traffic
+type by packets**, the headline read on "what is this capture". See `docs/usage.md`.
+
+## 3.5 Building / reproducing the dataset
 
 ```bash
-# convert raw captures → Wireshark CSV (scapy; --max_packets caps huge cloud-gaming files)
-python src/netjepa/scripts/convert_vlc_pcap.py --vlc_dir <raw_dir> \
-    --out_dir <5G_dataset_root> --max_packets 600000
-# then re-run the pipeline (preprocess → phase1 → phase2b → phase3 → export)
+# full 8-class build from the staged raw dir (Kaggle 5G + VLC_* + CG_Xbox folders)
+python -m netjepa.scripts.build_traffic_dataset \
+    --raw_dir <5G_dataset_root> \
+    --csv_out data/traffic_csvs --parquet_out data/processed_traffic
 ```
 
-## 3.7 Datasets we publish (and why we don't republish the processed data)
+To stage the VLC / cloud-gaming fold-ins next to the 5G data, `fetch_assets.py --with-foldins`
+downloads VLC from Zenodo (CC-BY-4.0) + cloud-gaming from Kaggle (BSD-3) and converts them
+(`convert_vlc_pcap.py`) into `VLC_*` / `CG_Xbox` folders in the 5G raw dir.
+
+## 3.6 What we publish (and why not the processed data)
 
 We publish **no new dataset**. All sources above are already public, and we deliberately do
-**not** redistribute our preprocessed parquet: it derives from the primary 5G dataset, whose
-license is **"Unknown"** (§3.1), so we have no clear right to re-host a derivative. Instead the
-processed data is **rebuilt from source on demand**: `python src/netjepa/scripts/fetch_assets.py`
-downloads the raw 5G captures from Kaggle (under your own Kaggle account/terms) and runs
-`preprocess_kaggle.py` locally. The processed parquet is gitignored (not shipped). This keeps
-reproduction one command away while staying within the source licenses. (The VLC and cloud-gaming
-fold-ins **are** permissively licensed — CC-BY-4.0 and BSD-3 — and could be redistributed with
-attribution, but for simplicity they too are fetched from source.)
+**not** redistribute the preprocessed parquet/CSVs: they derive from the primary 5G dataset,
+whose license is **"Unknown"** (§3.2), so we have no clear right to re-host a derivative.
+Instead the processed data is **rebuilt from source on demand** (§3.5), keeping reproduction
+one command away while staying within the source licenses. (VLC and cloud-gaming are
+permissively licensed — CC-BY-4.0 / BSD-3 — and could be redistributed with attribution, but
+for simplicity they too are fetched from source.)

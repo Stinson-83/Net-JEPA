@@ -35,23 +35,27 @@
   trained **from scratch** on the datasets below. See [docs/tech-stack.md §4.4](docs/tech-stack.md).
 - **Models Published** - **Hugging Face:
   [`kritikahd007/net-jepa`](https://huggingface.co/kritikahd007/net-jepa)** (**Apache-2.0**) — the
-  full trained Net-JEPA model (Phase-3 checkpoint `net_jepa_phase3.pt`, ~1.76M params: encoder +
-  fusion + predictor + EMA target + pooling + embedding head + α-centering) plus the fitted cosine
-  k-NN (`knn.joblib`), config, and model card ([`docs/hf_model_card.md`](docs/hf_model_card.md)).
-  Re-publishable from [`src/netjepa/scripts/publish_hf.py`](src/netjepa/scripts/publish_hf.py)
+  full trained **8-traffic-type** Net-JEPA model (Phase-3 checkpoint `net_jepa_phase3.pt`, ~1.76M
+  params: encoder + fusion + predictor + EMA target + pooling + embedding head + α-centering) plus
+  the fitted cosine k-NN (`knn.joblib`), config, `labels.json` (the 8 type names), and model card
+  ([`docs/hf_model_card.md`](docs/hf_model_card.md)). Test KPIs: accuracy **97.7%**, macro-F1
+  **0.954**. Re-publishable from [`src/netjepa/scripts/publish_hf.py`](src/netjepa/scripts/publish_hf.py)
   (`HF_TOKEN=… python src/netjepa/scripts/publish_hf.py --repo-id <user>/net-jepa`); checkpoint is
   also reproducible end-to-end from the training scripts.
 - **Datasets Used** -
   - [Kaggle · 5G Traffic Datasets](https://www.kaggle.com/datasets/kimdaegyeom/5g-traffic-datasets) (`kimdaegyeom/5g-traffic-datasets`) — primary training/test set. **License "Unknown" on Kaggle**, so we use it under Kaggle's terms and **don't redistribute it** — `fetch_assets.py` pulls it from source and preprocesses locally.
-  - [Zenodo · VLC / Valencia Flow-Based Traffic Classification](https://zenodo.org/records/15121418) — **CC-BY-4.0** (MS Teams supervised; Netflix/Prime/YouTube/Roblox pretrain-only).
-  - [Kaggle · Cloud Gaming Network Telemetry](https://www.kaggle.com/datasets/carloshfm/cloud-gaming-network-telemetry) (`carloshfm/cloud-gaming-network-telemetry`, [GitHub](https://github.com/dcomp-leris/VR-AR-CG-network-telemetry)) — **BSD-3** (Xbox Cloud over 5G, pretrain-only).
+  - [Zenodo · VLC / Valencia Flow-Based Traffic Classification](https://zenodo.org/records/15121418) — **CC-BY-4.0** (full VLC set incl. Spotify → audio_streaming, Web → web_browsing, Netflix/Prime/YouTube → VOD, Roblox → metaverse, Teams → video_conferencing — all supervised into the 8 traffic types).
+  - [Kaggle · Cloud Gaming Network Telemetry](https://www.kaggle.com/datasets/carloshfm/cloud-gaming-network-telemetry) (`carloshfm/cloud-gaming-network-telemetry`, [GitHub](https://github.com/dcomp-leris/VR-AR-CG-network-telemetry)) — **BSD-3** (Xbox Cloud over 5G → cloud_gaming, supervised).
 
-    Details, licenses, and how each was folded in: [docs/datasets.md](docs/datasets.md).
+    The current model classifies **8 common traffic types** (audio_streaming, cloud_gaming,
+    live_streaming, metaverse, online_gaming, video_conferencing, video_on_demand,
+    web_browsing), all fully supervised. Source→type mapping, licenses, preprocessing, and how
+    a raw `.pcap` is processed at inference: [docs/datasets.md](docs/datasets.md).
 - **Datasets Published** - None — and deliberately so: our preprocessed parquet derives from the
   primary 5G set whose license is **"Unknown"**, so we have no clear right to re-host a derivative.
   Instead it is **rebuilt from source on demand** — `python src/netjepa/scripts/fetch_assets.py`
   downloads the raw data from Kaggle (under your Kaggle terms) and preprocesses locally. The
-  processed parquet stays gitignored. See [docs/datasets.md §3.7](docs/datasets.md).
+  processed parquet stays gitignored. See [docs/datasets.md §3.6](docs/datasets.md).
 
 #### Final Presentation
 
@@ -82,6 +86,7 @@ inspired by published research, which we credit:
 We adapted these ideas to **encrypted network-flow classification** and added our own
 contributions: a packet-shape flow encoder with RTT/context fusion, the α-centering
 ("isotropisation") trick that meets the inter-class cosine KPI, category-level SupCon on a kept
-embedding, the pretrain-only vs supervised data-routing that removes a domain confound, and the
+embedding, **per-capture host-stat features that are train/inference-consistent** (the fix that
+took accuracy 0.86 → 0.977 and made real-`.pcap` upload classify correctly), and the
 "Signal Atlas" live demo. All OSS libraries we build on are credited in
 [docs/tech-stack.md](docs/tech-stack.md).
