@@ -125,6 +125,55 @@ def packets_to_tensors(packets: List[PacketRecord]
     return pkt_t, ctx_t, mask_t
 
 
+def pcap_to_flows(pcap_path: str, *, min_packets: int = 5, max_packets: int = 64,
+                  flow_timeout: float = 30.0) -> list:
+    """Parse a pcap and build flows EXACTLY like training: each packet -> the
+    netjepa/data/parser.py column schema, then flow_builder.extract_flows
+    (bidirectional 5-tuple, up to max_packets, idle split). Returns flow dicts.
+    All CSV-path fields are recovered from the pcap (flags + TLS hellos included)."""
+    import pandas as pd
+    from scapy.layers.inet import IP, TCP, UDP
+    from scapy.layers.inet6 import IPv6
+    from scapy.utils import PcapReader
+    from netjepa.data.flow_builder import extract_flows
+
+    rows = []
+    with PcapReader(str(pcap_path)) as reader:
+        for pkt in reader:
+            layer = pkt.getlayer(IP) or pkt.getlayer(IPv6)
+            if layer is None:
+                continue
+            tcp, udp = pkt.getlayer(TCP), pkt.getlayer(UDP)
+            if tcp is None and udp is None:
+                continue
+            tp = tcp if tcp is not None else udp
+            sp, dp = int(tp.sport), int(tp.dport)
+            is_syn = is_ack = is_syn_ack = is_fin = is_rst = is_ch = is_sh = False
+            if tcp is not None:
+                pid = 0
+                f = tcp.flags; hs, ha = ('S' in f), ('A' in f)
+                is_syn = hs and not ha; is_syn_ack = hs and ha; is_ack = ha and not hs
+                is_fin = 'F' in f; is_rst = 'R' in f
+                pl = bytes(tcp.payload)
+                if len(pl) >= 6 and pl[0] == 0x16:
+                    if pl[5] == 0x01:   is_ch = True
+                    elif pl[5] == 0x02: is_sh = True
+            else:
+                pid = 2 if 443 in (sp, dp) else 1
+            rows.append({'time': float(pkt.time), 'src_ip': str(layer.src), 'dst_ip': str(layer.dst),
+                         'src_port': sp, 'dst_port': dp, 'protocol_id': pid, 'length': int(len(pkt)),
+                         'is_syn': is_syn, 'is_ack': is_ack, 'is_syn_ack': is_syn_ack,
+                         'is_fin': is_fin, 'is_rst': is_rst,
+                         'is_client_hello': is_ch, 'is_server_hello': is_sh})
+    if not rows:
+        return []
+    df = pd.DataFrame(rows).sort_values('time').reset_index(drop=True)
+    df['time'] = df['time'] - df['time'].iloc[0]
+    flows, _ = extract_flows(df, '?', '?', str(pcap_path),
+                             min_packets=min_packets, max_packets=max_packets, flow_timeout=flow_timeout)
+    return flows
+
+
 # ── Classifier implementation ─────────────────────────────────────────────────
 
 class NetJEPAClassifier(Classifier):
@@ -170,6 +219,29 @@ class NetJEPAClassifier(Classifier):
                     if 0 <= label_id < len(CATEGORY_LABELS) else 'unknown')
         return Prediction(label=category, confidence=confidence,
                           embedding=emb_np[0], category=category)
+
+    def predict_flow(self, flow: dict, host_stats: dict) -> Prediction:
+        """Classify one flow_builder flow dict (training-identical path): up to 64
+        packets, handshake-based RTT, and src-host stats computed across all flows
+        of the capture (pass the output of compute_src_host_stats(all_flows))."""
+        if not self._ensure_loaded():
+            return Prediction(label='unknown', confidence=0.0, embedding=None, category='unknown')
+        pkts, client = flow['packets'], flow['client_ip']
+        rtt, rtt_valid = _extract_rtt(pkts, client)
+        feat, mask = _compute_packet_sequence(pkts, client, rtt, rtt_valid, MAX_PACKETS)
+        ctx = _compute_flow_context(pkts, client, rtt, rtt_valid, host_stats)
+        pkt_t = torch.from_numpy(np.asarray(feat, np.float32)).unsqueeze(0).to(self._device)
+        ctx_t = torch.from_numpy(np.asarray(ctx, np.float32)).unsqueeze(0).to(self._device)
+        mask_t = torch.from_numpy(np.asarray(mask)).unsqueeze(0).to(self._device)
+        with torch.no_grad():
+            emb = self._model.forward_downstream(pkt_t, ctx_t, mask_t)
+        emb_np = emb.cpu().numpy()
+        if self._knn is None:
+            return Prediction(label='unknown', confidence=0.0, embedding=emb_np[0], category='unknown')
+        label_id = int(self._knn.predict(emb_np)[0])
+        proba = self._knn.predict_proba(emb_np)[0]
+        cat = CATEGORY_LABELS[label_id] if 0 <= label_id < len(CATEGORY_LABELS) else 'unknown'
+        return Prediction(label=cat, confidence=float(proba.max()), embedding=emb_np[0], category=cat)
 
     def save(self, path: str) -> None:
         raise NotImplementedError('Use netjepa/utils/io.save_checkpoint instead.')

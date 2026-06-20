@@ -118,11 +118,23 @@ _executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='infer')
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+_PROTO_NAME = {0: 'TCP', 1: 'UDP', 2: 'QUIC'}
+
+
 def _flow_summary(packets) -> str:
-    sizes = [p.size for p in packets]
-    proto = packets[0].proto.upper() if packets else 'OTHER'
-    avg   = (sum(sizes) / len(sizes)) if sizes else 0.0
-    dur   = max(packets[-1].ts - packets[0].ts, 0.0) if packets else 0.0
+    if not packets:
+        return 'OTHER · 0 pkts · 0 B avg · 0.0s'
+    p0 = packets[0]
+    if isinstance(p0, dict):                       # flow_builder packet dicts
+        sizes = [p['length'] for p in packets]
+        times = [p['time'] for p in packets]
+        proto = _PROTO_NAME.get(p0.get('protocol_id', 3), 'OTHER')
+    else:                                          # PacketRecord
+        sizes = [p.size for p in packets]
+        times = [p.ts for p in packets]
+        proto = p0.proto.upper()
+    avg = sum(sizes) / len(sizes)
+    dur = max(times[-1] - times[0], 0.0)
     return f'{proto} · {len(sizes)} pkts · {avg:.0f} B avg · {dur:.1f}s'
 
 
@@ -228,29 +240,32 @@ def _infer_pcap_worker(loop: asyncio.AbstractEventLoop,
 
     emit({'stage': 'parse', 'pcap': Path(pcap_path).name})
 
-    # Parse as fast as possible (no real-time pacing for an uploaded file).
-    replay = PcapReplay(pcap_path, speed=1e9)
-    table  = FlowTable()
+    # Build flows EXACTLY like the training pipeline (parser schema -> flow_builder:
+    # up to 64 packets/flow, 30s idle split), and compute src-host stats across ALL
+    # flows — so a live flow is featurised identically to a training flow. (The
+    # terminal tool src/netjepa/scripts/infer_pcap.py uses the same path.)
+    from model.netjepa_classifier import pcap_to_flows
+    from netjepa.data.features import compute_src_host_stats
+    flows = pcap_to_flows(pcap_path)
+    host_stats = compute_src_host_stats(flows)
 
     added: List[dict] = []
     batch_id = int(time.time())
-    idx = 0
-    for key, pkts in table.process(replay.stream()):
-        ip_lo, ip_hi, port_lo, port_hi, proto = key
+    for idx, flow in enumerate(flows):
+        pkts = flow['packets']
         flow_id = f'live-{batch_id}-{idx:04d}'
         emit({'stage': 'flow', 'flow_id': flow_id,
-              'src': f'{ip_lo}:{port_lo}', 'dst': f'{ip_hi}:{port_hi}',
-              'proto': proto, 'packets': len(pkts)})
+              'src': f"{flow['src_ip']}:{flow['src_port']}", 'dst': f"{flow['dst_ip']}:{flow['dst_port']}",
+              'proto': _PROTO_NAME.get(flow['protocol_id'], 'OTHER'), 'packets': len(pkts)})
 
         emit({'stage': 'preprocess', 'flow_id': flow_id})
         t0   = time.perf_counter()
-        pred = model.predict(pkts)
+        pred = model.predict_flow(flow, host_stats)
         latency = round((time.perf_counter() - t0) * 1000, 2)
         emit({'stage': 'encode', 'flow_id': flow_id, 'latency_ms': latency})
 
         if pred.embedding is None:
             emit({'stage': 'error', 'flow_id': flow_id, 'error': 'no embedding (knn missing?)'})
-            idx += 1
             continue
 
         emit({'stage': 'classify', 'flow_id': flow_id,
@@ -279,7 +294,6 @@ def _infer_pcap_worker(loop: asyncio.AbstractEventLoop,
         emit({'stage': 'project', 'flow_id': flow_id, 'x': x, 'y': y,
               'label': pred.category, 'confidence': point['confidence'],
               'flow_summary': point['flow_summary']})
-        idx += 1
 
     emit({'stage': 'done', 'added': len(added),
           'total_live': len(_state['live_points'])})
