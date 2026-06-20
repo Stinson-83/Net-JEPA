@@ -37,12 +37,14 @@
   --nj-bad: #ff5d7a;
 
   /* category palette — matches classColors.ts order (manifest order) */
-  --cat-0: #22d3ee; /* game_streaming     — cloud gaming  */
-  --cat-1: #f637ec; /* live_streaming     — live          */
-  --cat-2: #fbbf24; /* metaverse          — XR            */
-  --cat-3: #a78bfa; /* online_game        — online gaming */
-  --cat-4: #4ade80; /* stored_streaming   — on-demand     */
+  --cat-0: #22d3ee; /* audio_streaming    — audio         */
+  --cat-1: #f637ec; /* cloud_gaming       — cloud gaming  */
+  --cat-2: #fbbf24; /* live_streaming     — live          */
+  --cat-3: #a78bfa; /* metaverse          — XR            */
+  --cat-4: #4ade80; /* online_gaming      — online gaming */
   --cat-5: #f97316; /* video_conferencing — calls         */
+  --cat-6: #60a5fa; /* video_on_demand    — on-demand     */
+  --cat-7: #fb7185; /* web_browsing       — web           */
 
   --nj-r-sm: 8px;
   --nj-r: 14px;

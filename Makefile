@@ -7,12 +7,15 @@
 #   make demo PORT=8080   |   make train DEVICE=cuda   |   make fetch-foldins FOLDIN_APPS=teams,netflix
 PY          ?= python3
 DEVICE      ?= cpu
-CKPT        ?= checkpoints/phase3/final.pt
-DATASET_ID  ?= phase3b_supcon
-FOLDIN_APPS ?= teams
+CKPT        ?= checkpoints/traffic8/phase3/final.pt
+CFG         ?= src/netjepa/configs/traffic.yaml
+LABELS      ?= data/processed_traffic/labels.json
+DATASET_ID  ?= traffic8
+FOLDIN_APPS ?= teams,netflix,prime,youtube,roblox,spotify,web,xbox
 PORT        ?= 8000
 
 SCRIPTS := src/netjepa/scripts
+RUN     := $(PY) -m netjepa.scripts
 
 .DEFAULT_GOAL := help
 .PHONY: help install demo stop reproduce serve webui \
@@ -46,27 +49,26 @@ install: .make-installed ## Install Python + web dependencies (auto, cached)
 ##@ Fetch assets (weights from Hugging Face, data from Kaggle)
 fetch-weights: install ## Weights ONLY, from Hugging Face (no token, no Kaggle account needed)
 	$(PY) $(SCRIPTS)/fetch_assets.py --weights-only
-fetch-data: install ## Data ONLY, from Kaggle -> preprocess (needs a free Kaggle API token)
-	$(PY) $(SCRIPTS)/fetch_assets.py --data-only
-fetch: install ## BOTH weights (HF) + data (Kaggle -> preprocess)
-	$(PY) $(SCRIPTS)/fetch_assets.py
-fetch-foldins: install ## Data + VLC/cloud-gaming fold-ins for the exact published config (FOLDIN_APPS=teams; LARGE)
+fetch-data: install ## Data ONLY, from Kaggle + fold-ins -> build 8-class dataset (needs Kaggle token; LARGE)
 	$(PY) $(SCRIPTS)/fetch_assets.py --data-only --with-foldins --foldin-apps $(FOLDIN_APPS)
+fetch: install ## BOTH weights (HF) + data (Kaggle + fold-ins -> build 8-class dataset)
+	$(PY) $(SCRIPTS)/fetch_assets.py --with-foldins --foldin-apps $(FOLDIN_APPS)
+fetch-foldins: fetch-data ## Alias of fetch-data (the 8-class build always needs the fold-ins)
 
 ##@ Run the pipeline (terminal)
-evaluate: install ## Evaluate the checkpoint and print the KPI summary (vars: CKPT, DEVICE)
-	$(PY) $(SCRIPTS)/evaluate.py --checkpoint $(CKPT) --device $(DEVICE)
+evaluate: install ## Evaluate the checkpoint and print the KPI summary (vars: CKPT, CFG, DEVICE)
+	$(RUN).evaluate --config $(CFG) --checkpoint $(CKPT) --device $(DEVICE)
 infer: install ## Classify a pcap in the terminal (no UI/server): make infer PCAP=path/to/file.pcap
 	@test -n "$(PCAP)" || { echo "usage: make infer PCAP=path/to/file.pcap"; exit 1; }
-	$(PY) $(SCRIPTS)/infer_pcap.py "$(PCAP)" --device $(DEVICE)
-train: install ## Train from scratch: phase1 -> phase2b -> phase3 -> evaluate (run 'make fetch-data' first; DEVICE=cuda)
-	$(PY) $(SCRIPTS)/train_phase1.py  --device $(DEVICE)
-	$(PY) $(SCRIPTS)/train_phase2b.py --device $(DEVICE)
-	$(PY) $(SCRIPTS)/train_phase3.py  --device $(DEVICE)
-	$(PY) $(SCRIPTS)/evaluate.py --checkpoint $(CKPT) --device $(DEVICE)
+	$(RUN).infer_pcap "$(PCAP)" --checkpoint $(CKPT) --labels $(LABELS) --device $(DEVICE)
+train: install ## Train the 8-class model from scratch: phase1 -> phase2b -> phase3 -> evaluate (run 'make fetch-data' first; DEVICE=cuda)
+	$(RUN).train_phase1  --config $(CFG) --ckpt_dir checkpoints/traffic8/phase1 --device $(DEVICE)
+	$(RUN).train_phase2b --config $(CFG) --init_ckpt checkpoints/traffic8/phase1/final.pt --ckpt_dir checkpoints/traffic8/phase2b --device $(DEVICE)
+	$(RUN).train_phase3  --config $(CFG) --phase2_ckpt checkpoints/traffic8/phase2b/final.pt --ckpt_dir checkpoints/traffic8/phase3 --device $(DEVICE)
+	$(RUN).evaluate --config $(CFG) --checkpoint $(CKPT) --device $(DEVICE)
 export: install ## Re-export atlas artifacts + galaxy cloud for the UI
-	$(PY) $(SCRIPTS)/export_artifacts.py --checkpoint $(CKPT) --dataset-id $(DATASET_ID) --name "Phase 3b" --device $(DEVICE)
-	$(PY) $(SCRIPTS)/export_cloud.py     --checkpoint $(CKPT) --dataset-id $(DATASET_ID) --cap 1500 --device $(DEVICE)
+	$(RUN).export_artifacts --config $(CFG) --checkpoint $(CKPT) --dataset-id $(DATASET_ID) --name "Traffic-8" --device $(DEVICE)
+	$(RUN).export_cloud     --config $(CFG) --checkpoint $(CKPT) --dataset-id $(DATASET_ID) --cap 1500 --device $(DEVICE)
 
 ##@ Run UI / server separately (two terminals)
 serve: install ## Inference server only (auto-downloads weights from HF if missing)
@@ -79,4 +81,4 @@ clean: ## Remove caches, eval outputs, server logs (keeps fetched weights/data +
 	find . -path ./webui/node_modules -prune -o -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
 	rm -rf eval_results src/*.egg-info *.egg-info netjepa-server.log .netjepa-server.pid
 clean-assets: ## Also delete fetched weights + processed data (forces a clean re-fetch)
-	rm -rf data/processed checkpoints/phase3/final.pt checkpoints/phase3/knn.joblib
+	rm -rf data/processed_traffic data/traffic_csvs checkpoints/traffic8/phase3/final.pt checkpoints/traffic8/phase3/knn.joblib

@@ -28,6 +28,10 @@ export function CategoryIcon({ icon, size = 18, className }: { icon: IconKey } &
       return <Svg size={size} className={className}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4" /></Svg>;
     case 'call':
       return <Svg size={size} className={className}><rect x="2.5" y="6" width="13" height="12" rx="2" /><path d="m15.5 10 6-3.5v11l-6-3.5Z" /></Svg>;
+    case 'audio':
+      return <Svg size={size} className={className}><path d="M9 18V6l10-2v12" /><circle cx="6" cy="18" r="2.5" /><circle cx="16" cy="16" r="2.5" /></Svg>;
+    case 'web':
+      return <Svg size={size} className={className}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18" /></Svg>;
   }
 }
 

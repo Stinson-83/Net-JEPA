@@ -1,20 +1,22 @@
 {
   "datasets": [
     {
-      "id": "phase3b_supcon",
-      "name": "Phase 3b \u2014 SupCon + VLC + cloud-gaming",
-      "trained_on": "2026-06-12",
-      "n_flows": 7481
+      "id": "traffic8",
+      "name": "Traffic-8 (8 types)",
+      "trained_on": "2026-06-21",
+      "n_flows": 10481
     }
   ],
-  "active_dataset": "phase3b_supcon",
+  "active_dataset": "traffic8",
   "classes": [
-    "game_streaming",
+    "audio_streaming",
+    "cloud_gaming",
     "live_streaming",
     "metaverse",
-    "online_game",
-    "stored_streaming",
-    "video_conferencing"
+    "online_gaming",
+    "video_conferencing",
+    "video_on_demand",
+    "web_browsing"
   ],
   "embedding_dim": 128,
   "model_version": "netjepa-ckpt-e50"

@@ -199,6 +199,14 @@ def main() -> None:
 
     device = torch.device(args.device)
     processed_dir = args.processed_dir or data_cfg['processed_dir']
+    # Use the dataset's own class names (labels.json) instead of the built-in
+    # 6-category list, so an 8-traffic-type export is labelled correctly.
+    global CATEGORY_LABELS
+    _labels_json = Path(processed_dir) / 'labels.json'
+    if _labels_json.is_file():
+        import json as _json
+        _d = _json.load(open(_labels_json))
+        CATEGORY_LABELS = _d.get('traffic_types', _d) if isinstance(_d, dict) else _d
     out_root = Path(args.out_dir)
     out_dir = out_root / args.dataset_id
     (out_dir / 'flow_features').mkdir(parents=True, exist_ok=True)

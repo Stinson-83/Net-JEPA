@@ -125,7 +125,7 @@ function synthFlow(label: string): InjectedFlow {
   const avg = cs?.avg_packet_size ?? 400;
   const dur = cs?.avg_duration_s ?? 8;
   const rtt = cs?.avg_rtt_ms ?? 60;
-  const proto: InjectedFlow['tuple']['protocol'] = label === 'online_game' || label === 'metaverse' ? 'UDP' : 'TCP';
+  const proto: InjectedFlow['tuple']['protocol'] = label === 'online_gaming' || label === 'metaverse' ? 'UDP' : 'TCP';
   const n = 40;
   const sizes = Array.from({ length: n }, (_, i) => Math.max(40, Math.round(avg * (0.5 + Math.random()) * (i % 5 === 0 ? 1.6 : 0.7))));
   const dir = Array.from({ length: n }, (_, i) => (i % 3 === 0 ? -1 : 1));

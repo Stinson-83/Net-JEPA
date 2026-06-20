@@ -186,6 +186,7 @@ class NetJEPAClassifier(Classifier):
         self._model = None
         self._knn   = None
         self._device = torch.device('cpu')
+        self.labels = list(CATEGORY_LABELS)   # class-id -> name; overridden by labels.json in load()
 
     def _ensure_loaded(self) -> bool:
         return self._model is not None
@@ -213,10 +214,10 @@ class NetJEPAClassifier(Classifier):
             return Prediction(label='unknown', confidence=0.0,
                               embedding=emb_np[0], category='unknown')
 
-        # The Phase 3 kNN now predicts the 6 coarse CATEGORIES directly (the
-        # level the cosine/accuracy KPIs are defined at), not the 15 apps.
-        category = (CATEGORY_LABELS[label_id]
-                    if 0 <= label_id < len(CATEGORY_LABELS) else 'unknown')
+        # The Phase 3 kNN predicts the traffic TYPE directly (the level the
+        # cosine/accuracy KPIs are defined at). self.labels comes from labels.json.
+        category = (self.labels[label_id]
+                    if 0 <= label_id < len(self.labels) else 'unknown')
         return Prediction(label=category, confidence=confidence,
                           embedding=emb_np[0], category=category)
 
@@ -240,7 +241,7 @@ class NetJEPAClassifier(Classifier):
             return Prediction(label='unknown', confidence=0.0, embedding=emb_np[0], category='unknown')
         label_id = int(self._knn.predict(emb_np)[0])
         proba = self._knn.predict_proba(emb_np)[0]
-        cat = CATEGORY_LABELS[label_id] if 0 <= label_id < len(CATEGORY_LABELS) else 'unknown'
+        cat = self.labels[label_id] if 0 <= label_id < len(self.labels) else 'unknown'
         return Prediction(label=cat, confidence=float(proba.max()), embedding=emb_np[0], category=cat)
 
     def save(self, path: str) -> None:
@@ -248,23 +249,43 @@ class NetJEPAClassifier(Classifier):
 
     @classmethod
     def load(cls, checkpoint_path: str,
-             knn_path: str | None = None) -> 'NetJEPAClassifier':
-        """Load a trained NetJEPA checkpoint and optional kNN index."""
+             knn_path: str | None = None,
+             labels: list[str] | str | None = None) -> 'NetJEPAClassifier':
+        """Load a trained NetJEPA checkpoint and optional kNN index.
+
+        `labels` names the class ids the kNN predicts. Pass a list, a path to a
+        labels.json (`{"traffic_types": [...]}`), or leave None to auto-discover:
+        a labels.json next to the checkpoint, else data/processed_traffic/labels.json,
+        else the built-in 6-category names."""
         _lazy_imports()
-        import joblib
+        import joblib, json
 
         obj = cls()
         obj._model = _NetJEPA()
         _load_checkpoint(obj._model, None, checkpoint_path, obj._device)
         obj._model.eval()
 
+        ckpt_dir = Path(checkpoint_path).parent
         if knn_path and Path(knn_path).exists():
             obj._knn = joblib.load(knn_path)
         else:
-            # Try to find a knn.joblib next to the checkpoint
-            ckpt_dir = Path(checkpoint_path).parent
             candidate = ckpt_dir / 'knn.joblib'
             if candidate.exists():
                 obj._knn = joblib.load(candidate)
+
+        # resolve labels: explicit list / explicit json path / auto-discover
+        def _read_labels(p: Path):
+            d = json.load(open(p))
+            return d.get('traffic_types', d) if isinstance(d, dict) else d
+        if isinstance(labels, list):
+            obj.labels = labels
+        elif isinstance(labels, str) and Path(labels).is_file():
+            obj.labels = _read_labels(Path(labels))
+        else:
+            for cand in (ckpt_dir / 'labels.json',
+                         Path('data/processed_traffic/labels.json')):
+                if cand.is_file():
+                    obj.labels = _read_labels(cand)
+                    break
 
         return obj

@@ -22,8 +22,9 @@ Without installing, point uvicorn at the source root instead:
     uvicorn server.app:app --app-dir src --host 0.0.0.0 --port 8000
 
 Environment variables:
-    DATASET_ID      — export sub-dir under webui/public/data (default: phase3b_supcon)
-    NETJEPA_CKPT    — trained NetJEPA checkpoint (default: checkpoints/phase3/final.pt)
+    DATASET_ID      — export sub-dir under webui/public/data (default: traffic8)
+    NETJEPA_CKPT    — trained NetJEPA checkpoint (default: checkpoints/traffic8/phase3/final.pt)
+    NETJEPA_LABELS  — labels.json with the 8 traffic-type names (auto-fetched from HF)
     KNN_PATH        — knn.joblib index (optional, auto-detected from ckpt dir)
     PCAP_PATH       — optional .pcap to auto-replay on startup (legacy live mode)
     REPLAY_SPEED    — float multiplier for replay speed (default: 1.0)
@@ -64,10 +65,12 @@ def _resolve(p: str) -> str:
     pp = Path(p)
     return str(pp if pp.is_absolute() else (PROJECT_ROOT / pp))
 
-DATASET_ID   = os.environ.get('DATASET_ID',   'phase3b_supcon')
-NETJEPA_CKPT = _resolve(os.environ.get('NETJEPA_CKPT', 'checkpoints/phase3/final.pt'))
+DATASET_ID   = os.environ.get('DATASET_ID',   'traffic8')
+NETJEPA_CKPT = _resolve(os.environ.get('NETJEPA_CKPT', 'checkpoints/traffic8/phase3/final.pt'))
 KNN_PATH     = os.environ.get('KNN_PATH', '')
 KNN_PATH     = _resolve(KNN_PATH) if KNN_PATH else ''
+# The 8 traffic-type names the kNN predicts (auto-downloaded from HF if missing).
+NETJEPA_LABELS = _resolve(os.environ.get('NETJEPA_LABELS', 'data/processed_traffic/labels.json'))
 PCAP_PATH    = os.environ.get('PCAP_PATH', '')
 PCAP_PATH    = _resolve(PCAP_PATH) if PCAP_PATH else ''
 REPLAY_SPEED = float(os.environ.get('REPLAY_SPEED', '1.0'))
@@ -180,6 +183,13 @@ def _maybe_fetch_weights() -> None:
     if not knn.is_file():
         shutil.copy(hf_hub_download(NETJEPA_HF_REPO, 'knn.joblib'), knn)
         KNN_PATH = str(knn)
+    labels = Path(NETJEPA_LABELS)
+    if not labels.is_file():
+        try:
+            labels.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(hf_hub_download(NETJEPA_HF_REPO, 'labels.json'), labels)
+        except Exception:
+            pass  # fall back to labels.json next to the ckpt / built-in names
 
 
 def _load_runtime() -> None:
@@ -196,7 +206,9 @@ def _load_runtime() -> None:
                 'netjepa/scripts/export_artifacts.py to generate umap.joblib')
 
         import joblib
-        _state['model']   = NetJEPAClassifier.load(NETJEPA_CKPT, knn_path=KNN_PATH or None)
+        _labels = NETJEPA_LABELS if Path(NETJEPA_LABELS).is_file() else None
+        _state['model']   = NetJEPAClassifier.load(NETJEPA_CKPT, knn_path=KNN_PATH or None,
+                                                   labels=_labels)
         _state['reducer'] = joblib.load(UMAP_PATH)
 
         umap_json = DATASET_DIR / 'embeddings_umap.json'

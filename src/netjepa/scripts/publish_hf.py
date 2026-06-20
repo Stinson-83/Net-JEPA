@@ -40,15 +40,17 @@ def main() -> None:
                     help="Target HF model repo, e.g. your-username/net-jepa")
     ap.add_argument("--token", default=None,
                     help="HF write token (else uses $HF_TOKEN or a cached login)")
-    ap.add_argument("--checkpoint", default="checkpoints/phase3/final.pt",
+    ap.add_argument("--checkpoint", default="checkpoints/traffic8/phase3/final.pt",
                     help="Trained Net-JEPA checkpoint (default: %(default)s)")
-    ap.add_argument("--knn", default="checkpoints/phase3/knn.joblib",
+    ap.add_argument("--knn", default="checkpoints/traffic8/phase3/knn.joblib",
                     help="Fitted cosine k-NN classifier (default: %(default)s)")
-    ap.add_argument("--config", default="src/netjepa/configs/default.yaml",
+    ap.add_argument("--config", default="src/netjepa/configs/traffic.yaml",
                     help="Config to publish as config.yaml (default: %(default)s)")
+    ap.add_argument("--labels", default="data/processed_traffic/labels.json",
+                    help="labels.json with the traffic-type names (default: %(default)s)")
     ap.add_argument("--card", default="docs/hf_model_card.md",
                     help="Model card → uploaded as README.md (default: %(default)s)")
-    ap.add_argument("--umap", default="webui/public/data/phase3b_supcon/umap.joblib",
+    ap.add_argument("--umap", default="webui/public/data/traffic8/umap.joblib",
                     help="UMAP reducer for the 2-D atlas (uploaded only with --with-umap)")
     ap.add_argument("--with-umap", action="store_true",
                     help="Also upload the UMAP reducer (umap.joblib) for atlas-projection reproducibility")
@@ -73,6 +75,7 @@ def main() -> None:
         (_resolve(args.checkpoint), "net_jepa_phase3.pt"),
         (_resolve(args.knn),        "knn.joblib"),
         (_resolve(args.config),     "config.yaml"),
+        (_resolve(args.labels),     "labels.json"),
     ]
     if args.with_umap:
         uploads.append((_resolve(args.umap), "umap.joblib"))

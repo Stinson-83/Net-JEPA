@@ -47,7 +47,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_DIR = Path(__file__).resolve().parent
 
 # Which fold-in apps live where. VLC apps come from Zenodo; xbox from Kaggle.
-VLC_APPS = {"teams", "netflix", "prime", "youtube", "roblox"}
+# The 8-class model trains on the FULL VLC set (incl. spotify→audio, web→web_browsing).
+VLC_APPS = {"teams", "netflix", "prime", "youtube", "roblox", "spotify", "web"}
 ZENODO_VLC_RECORD = "15121418"
 CLOUD_GAMING_KAGGLE = "carloshfm/cloud-gaming-network-telemetry"
 
@@ -58,7 +59,7 @@ def _abs(p: str) -> Path:
 
 
 # ── weights ─────────────────────────────────────────────────────────────────
-def fetch_weights(repo: str, ckpt_dir: Path) -> None:
+def fetch_weights(repo: str, ckpt_dir: Path, labels_path: Path) -> None:
     try:
         from huggingface_hub import hf_hub_download
     except ImportError:
@@ -72,6 +73,16 @@ def fetch_weights(repo: str, ckpt_dir: Path) -> None:
         print(f"  downloading {remote} from HF {repo} …")
         shutil.copy(hf_hub_download(repo_id=repo, filename=remote), dst)
         print(f"    → {dst}")
+    # the 8 traffic-type names the kNN predicts
+    if labels_path.is_file():
+        print("  labels.json: already present ✓")
+    else:
+        try:
+            labels_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(hf_hub_download(repo_id=repo, filename="labels.json"), labels_path)
+            print(f"    → {labels_path}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"    (labels.json not on the HF repo yet — {exc})")
 
 
 # ── fold-ins (convert raw pcaps → VLC_*/CG_Xbox CSV folders next to the 5G data) ──
@@ -129,8 +140,8 @@ def _foldin_cloud_gaming(raw_root: Path, max_packets: int) -> None:
     _convert(Path(cg), raw_root, max_packets)
 
 
-# ── data (5G base + optional fold-ins → preprocess) ──────────────────────────
-def fetch_data(kaggle_id: str, out_dir: Path, *, with_foldins: bool,
+# ── data (5G base + fold-ins → build the 8-class dataset) ─────────────────────
+def fetch_data(kaggle_id: str, out_dir: Path, csv_out: Path, *, with_foldins: bool,
                foldin_apps: set[str], max_packets: int) -> None:
     try:
         import kagglehub
@@ -148,16 +159,20 @@ def fetch_data(kaggle_id: str, out_dir: Path, *, with_foldins: bool,
 
     if with_foldins:
         # convert writes VLC_*/CG_Xbox CSV folders INTO raw_root so the single
-        # preprocess pass below picks them up via FOLDER_MAP (rglob by name).
-        print("  folding in extra datasets (writes VLC_*/CG_Xbox next to the 5G folders) …")
+        # build pass below picks them up via FOLDER_TO_TYPE (rglob by folder name).
+        print("  folding in VLC + cloud-gaming (writes VLC_*/CG_Xbox next to the 5G folders) …")
         _foldin_vlc(raw_root, foldin_apps, max_packets)
         if "xbox" in foldin_apps:
             _foldin_cloud_gaming(raw_root, max_packets)
+    else:
+        print("  ⚠ NOTE: the 8-class model needs the VLC + cloud-gaming fold-ins "
+              "(audio_streaming/web_browsing/cloud_gaming come from them). Re-run with "
+              "--with-foldins to build the full labelled set.")
 
-    print("  running preprocess_kaggle.py (raw → parquet splits) …")
+    print("  running build_traffic_dataset.py (raw → 8-class CSVs + parquet splits) …")
     subprocess.check_call([
-        sys.executable, str(SCRIPTS_DIR / "preprocess_kaggle.py"),
-        "--raw_dir", str(raw_root), "--out_dir", str(out_dir),
+        sys.executable, "-m", "netjepa.scripts.build_traffic_dataset",
+        "--raw_dir", str(raw_root), "--csv_out", str(csv_out), "--parquet_out", str(out_dir),
     ])
     print(f"    → {out_dir}")
 
@@ -170,16 +185,20 @@ def main() -> None:
                     help="published HF model repo for the weights (default: %(default)s)")
     ap.add_argument("--kaggle-dataset", default="kimdaegyeom/5g-traffic-datasets",
                     help="Kaggle dataset id for the raw 5G captures (default: %(default)s)")
-    ap.add_argument("--ckpt-dir", default="checkpoints/phase3",
+    ap.add_argument("--ckpt-dir", default="checkpoints/traffic8/phase3",
                     help="where to place final.pt + knn.joblib (default: %(default)s)")
-    ap.add_argument("--out-dir", default="data/processed",
-                    help="where preprocess writes the parquet splits (default: %(default)s)")
+    ap.add_argument("--out-dir", default="data/processed_traffic",
+                    help="where the build writes the parquet splits (default: %(default)s)")
+    ap.add_argument("--csv-out", default="data/traffic_csvs",
+                    help="where the build writes the per-type CSVs (default: %(default)s)")
+    ap.add_argument("--labels", default="data/processed_traffic/labels.json",
+                    help="where to place the fetched labels.json (default: %(default)s)")
     ap.add_argument("--with-foldins", action="store_true",
-                    help="also fold in VLC (Zenodo, CC-BY-4.0) + cloud-gaming (Kaggle, BSD-3) "
-                         "to reproduce the published checkpoint exactly (LARGE downloads)")
-    ap.add_argument("--foldin-apps", default="teams,netflix,prime,youtube,roblox,xbox",
-                    help="comma-list of fold-in apps to include (default: the published set). "
-                         "e.g. 'teams' for just the video-conf boost")
+                    help="fold in VLC (Zenodo, CC-BY-4.0) + cloud-gaming (Kaggle, BSD-3) — "
+                         "REQUIRED to build the full 8-class labelled set (LARGE downloads)")
+    ap.add_argument("--foldin-apps", default="teams,netflix,prime,youtube,roblox,spotify,web,xbox",
+                    help="comma-list of fold-in apps (default: the full 8-class set). "
+                         "spotify→audio_streaming, web→web_browsing, xbox→cloud_gaming")
     ap.add_argument("--max-packets", type=int, default=600000,
                     help="cap packets per converted fold-in capture (default: %(default)s)")
     ap.add_argument("--weights-only", action="store_true", help="fetch only the model weights")
@@ -190,14 +209,15 @@ def main() -> None:
         sys.exit("--weights-only and --data-only are mutually exclusive.")
 
     ckpt_dir, out_dir = _abs(args.ckpt_dir), _abs(args.out_dir)
+    csv_out, labels_path = _abs(args.csv_out), _abs(args.labels)
     foldin_apps = {a.strip().lower() for a in args.foldin_apps.split(",") if a.strip()}
 
     if not args.data_only:
         print("== weights (Hugging Face) ==")
-        fetch_weights(args.hf_repo, ckpt_dir)
+        fetch_weights(args.hf_repo, ckpt_dir, labels_path)
     if not args.weights_only:
-        print("== data (raw download → preprocess) ==")
-        fetch_data(args.kaggle_dataset, out_dir, with_foldins=args.with_foldins,
+        print("== data (raw download → build 8-class dataset) ==")
+        fetch_data(args.kaggle_dataset, out_dir, csv_out, with_foldins=args.with_foldins,
                    foldin_apps=foldin_apps, max_packets=args.max_packets)
 
     print("\n✅ done.")
