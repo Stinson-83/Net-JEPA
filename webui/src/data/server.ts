@@ -88,21 +88,27 @@ export async function fetchServerMetrics(): Promise<MetricsData | null> {
  * points it just added. null if the server is unavailable or errored — caller
  * falls back to the heuristic projector.
  */
+export interface InferSummary {
+  n_flows: number;
+  flow_counts: Record<string, number>;
+  packet_pct: Record<string, number>;
+  dominant: string | null;
+  rep_embedding?: number[] | null;   // L2-normalised dominant-class mean — for cosine compare
+}
 export interface InferServerResult {
   added: UmapPoint[];
-  summary?: {
-    n_flows: number;
-    flow_counts: Record<string, number>;
-    packet_pct: Record<string, number>;
-    dominant: string | null;
-  };
+  summary?: InferSummary;
 }
 
-export async function inferPcapOnServer(file: File): Promise<InferServerResult | null> {
+/** Optionally pass `degrade` (JEPA degrade_flow kwargs) to apply the degradation to
+ * every flow before classification — the Proof-Lab "degraded → still correct" run. */
+export async function inferPcapOnServer(
+  file: File, degrade?: Record<string, number>): Promise<InferServerResult | null> {
   if (!(await serverHealthy(true))) return null;
   try {
     const form = new FormData();
     form.append('file', file, file.name);
+    if (degrade) form.append('degrade', JSON.stringify(degrade));
     const res = await fetch(`${SERVER_URL}/api/infer`, { method: 'POST', body: form });
     if (!res.ok) return null;
     const data = (await res.json()) as InferServerResult;

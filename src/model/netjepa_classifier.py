@@ -23,11 +23,13 @@ _compute_packet_sequence = None
 _compute_flow_context = None
 _compute_src_host_stats = None
 _extract_rtt = None
+_degrade_flow = None
 
 
 def _lazy_imports():
     global _NetJEPA, _load_checkpoint
     global _compute_packet_sequence, _compute_flow_context, _compute_src_host_stats, _extract_rtt
+    global _degrade_flow
     if _NetJEPA is None:
         import sys
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -38,12 +40,14 @@ def _lazy_imports():
         from netjepa.data.features import (
             compute_packet_sequence, compute_flow_context, compute_src_host_stats)
         from netjepa.data.rtt import extract_rtt
+        from netjepa.data.augment import degrade_flow
         _NetJEPA = NetJEPA
         _load_checkpoint = load_checkpoint
         _compute_packet_sequence = compute_packet_sequence
         _compute_flow_context = compute_flow_context
         _compute_src_host_stats = compute_src_host_stats
         _extract_rtt = extract_rtt
+        _degrade_flow = degrade_flow
 
 
 # ── App / category label maps (must match netjepa/data/preprocess.py) ────────
@@ -221,16 +225,25 @@ class NetJEPAClassifier(Classifier):
         return Prediction(label=category, confidence=confidence,
                           embedding=emb_np[0], category=category)
 
-    def predict_flow(self, flow: dict, host_stats: dict) -> Prediction:
+    def predict_flow(self, flow: dict, host_stats: dict, degrade: dict | None = None) -> Prediction:
         """Classify one flow_builder flow dict (training-identical path): up to 64
         packets, handshake-based RTT, and src-host stats computed across all flows
-        of the capture (pass the output of compute_src_host_stats(all_flows))."""
+        of the capture (pass the output of compute_src_host_stats(all_flows)).
+
+        If `degrade` is given (a dict of degrade_flow kwargs, e.g.
+        {'packet_loss_prob':1.0,'packet_loss_window':0.3}), the JEPA degradation is
+        applied to the flow's features before embedding — used by the live demo's
+        "degraded flow → still correct" run."""
         if not self._ensure_loaded():
             return Prediction(label='unknown', confidence=0.0, embedding=None, category='unknown')
         pkts, client = flow['packets'], flow['client_ip']
         rtt, rtt_valid = _extract_rtt(pkts, client)
         feat, mask = _compute_packet_sequence(pkts, client, rtt, rtt_valid, MAX_PACKETS)
         ctx = _compute_flow_context(pkts, client, rtt, rtt_valid, host_stats)
+        if degrade:
+            feat, ctx, mask = _degrade_flow(np.asarray(feat, np.float32),
+                                            np.asarray(ctx, np.float32),
+                                            np.asarray(mask), **degrade)
         pkt_t = torch.from_numpy(np.asarray(feat, np.float32)).unsqueeze(0).to(self._device)
         ctx_t = torch.from_numpy(np.asarray(ctx, np.float32)).unsqueeze(0).to(self._device)
         mask_t = torch.from_numpy(np.asarray(mask)).unsqueeze(0).to(self._device)

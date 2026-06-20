@@ -32,6 +32,7 @@ Environment variables:
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import math
 import os
@@ -51,7 +52,7 @@ IMPORT_ROOT  = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(IMPORT_ROOT))
 
-from fastapi import FastAPI, UploadFile, File, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -268,7 +269,7 @@ def _project_xy(emb: 'np.ndarray', label: str, idx: int) -> tuple:
 
 
 def _infer_pcap_worker(loop: asyncio.AbstractEventLoop,
-                       pcap_path: str) -> List[dict]:
+                       pcap_path: str, degrade: dict | None = None) -> List[dict]:
     """Runs in a worker thread. Parses the pcap, classifies + projects every
     flow, streams each stage over /ws, persists + returns the new points."""
     def emit(ev: dict) -> None:
@@ -301,7 +302,7 @@ def _infer_pcap_worker(loop: asyncio.AbstractEventLoop,
 
         emit({'stage': 'preprocess', 'flow_id': flow_id})
         t0   = time.perf_counter()
-        pred = model.predict_flow(flow, host_stats)
+        pred = model.predict_flow(flow, host_stats, degrade=degrade)
         latency = round((time.perf_counter() - t0) * 1000, 2)
         emit({'stage': 'encode', 'flow_id': flow_id, 'latency_ms': latency})
 
@@ -431,14 +432,39 @@ def _summarize(added: List[dict]) -> dict:
     pct = {k: round(100 * v / total, 1)
            for k, v in sorted(weighted.items(), key=lambda kv: -kv[1])}
     dominant = max(weighted.items(), key=lambda kv: kv[1])[0] if weighted else None
+    # A per-capture representative embedding = L2-normalised mean of the dominant
+    # class's flow embeddings. Two captures' rep_embeddings give the intra/inter
+    # cosine the Proof-Lab "compare two flows" overlay reports.
+    rep = None
+    embs = [p['embedding'] for p in added
+            if p.get('label') == dominant and p.get('embedding') is not None]
+    if embs:
+        m = np.asarray(embs, dtype=np.float32).mean(axis=0)
+        n = float(np.linalg.norm(m))
+        if n > 0:
+            rep = [round(float(v), 5) for v in (m / n)]
     return {'n_flows': len(added), 'flow_counts': counts,
-            'packet_pct': pct, 'dominant': dominant}
+            'packet_pct': pct, 'dominant': dominant, 'rep_embedding': rep}
 
 
 @app.post('/api/infer')
-async def infer(file: UploadFile = File(...)) -> JSONResponse:
+async def infer(file: UploadFile = File(...),
+                degrade: str | None = Form(None)) -> JSONResponse:
+    """Classify an uploaded pcap. Optional `degrade` (JSON of degrade_flow kwargs,
+    e.g. {"packet_loss_prob":1.0,"packet_loss_window":0.3}) applies the JEPA
+    degradation to every flow before embedding — the "degraded flow → still
+    correct" demo run."""
     if _state['load_error'] is not None:
         return JSONResponse({'error': _state['load_error']}, status_code=503)
+
+    deg = None
+    if degrade:
+        try:
+            deg = json.loads(degrade)
+            if not isinstance(deg, dict):
+                deg = None
+        except (ValueError, TypeError):
+            deg = None
 
     suffix = Path(file.filename or 'upload.pcap').suffix or '.pcap'
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -447,7 +473,8 @@ async def infer(file: UploadFile = File(...)) -> JSONResponse:
 
     loop = asyncio.get_event_loop()
     try:
-        added = await loop.run_in_executor(_executor, _infer_pcap_worker, loop, tmp_path)
+        added = await loop.run_in_executor(
+            _executor, functools.partial(_infer_pcap_worker, loop, tmp_path, degrade=deg))
     finally:
         try:
             os.unlink(tmp_path)

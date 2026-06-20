@@ -8,6 +8,7 @@ import { CategoryIcon, IconSparkle } from '../ui/icons';
 import { Bar } from '../ui/primitives';
 import Legend from '../panels/Legend';
 import InjectDock from '../panels/InjectDock';
+import ProofLab from '../panels/ProofLab';
 import FlowInspector from '../panels/FlowInspector';
 
 function Tooltip({ info }: { info: HoverInfo }) {
@@ -108,8 +109,11 @@ export default function Atlas() {
         {selectedId ? <FlowInspector /> : <AtlasContext />}
       </div>
 
-      {/* inject dock */}
-      <div className="absolute bottom-3 left-3 right-[384px] z-10"><InjectDock /></div>
+      {/* proof lab + inject dock */}
+      <div className="absolute bottom-3 left-3 right-[384px] z-10 space-y-2">
+        <ProofLab />
+        <InjectDock />
+      </div>
     </div>
   );
 }
