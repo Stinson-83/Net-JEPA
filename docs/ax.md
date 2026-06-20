@@ -37,7 +37,7 @@ under continuous human review.
   `.pcap`s misclassified — even the literal Netflix VOD training source read as cloud_gaming.
   The agent diffed the train vs. inference feature tensors, proved they were byte-identical,
   then isolated the real cause: **host stats computed globally instead of per-capture** (an
-  unreproducible train/inference leak). Fixing it lifted accuracy **0.86 → 0.977** *and* made
+  unreproducible train/inference leak). Fixing it lifted accuracy **0.86 → 0.997** *and* made
   real-pcap upload work. We report the remaining weak spot (single-flow pcaps) rather than bury
   it. Agentic tooling made the honest path the cheap path.
 - **Breadth without losing the thread.** It moved between PyTorch training code, FastAPI

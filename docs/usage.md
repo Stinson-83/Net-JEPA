@@ -110,7 +110,7 @@ python -m netjepa.scripts.train_phase2b --config $CFG \
 python -m netjepa.scripts.train_phase3  --config $CFG \
     --phase2_ckpt checkpoints/traffic8/phase2b/final.pt --ckpt_dir checkpoints/traffic8/phase3 --device cuda
 
-# 5. Evaluate against the test split  → kNN ~0.977, macro-F1 ~0.954, all KPIs
+# 5. Evaluate against the test split  → kNN ~0.997, macro-F1 ~0.992, all KPIs
 python -m netjepa.scripts.evaluate --config $CFG \
     --checkpoint checkpoints/traffic8/phase3/final.pt --device cuda
 

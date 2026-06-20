@@ -47,13 +47,13 @@ The five-KPI table, all ✅:
 
 | KPI | Target | Net-JEPA |
 |---|---|---|
-| Intra cosine | >0.7 | **0.94** |
-| Inter cosine | <0.3 | **−0.01** |
-| Accuracy | ≥90% | **97.7%** |
-| Generalization (η=7) | ≥85% | **97.6%** |
-| Latency | <100 ms | **4.1 ms** (CPU) |
+| Intra cosine | >0.7 | **0.98** |
+| Inter cosine | <0.3 | **−0.04** |
+| Accuracy | ≥90% | **99.7%** |
+| Generalization (η=7) | ≥85% | **99.6%** |
+| Latency | <100 ms | **3.5 ms** (CPU) |
 
-macro-F1 **0.954** · silhouette **0.70** · 8 traffic types. Runs on CPU. The jump from 0.86
+macro-F1 **0.992** · silhouette **0.87** · 8 traffic types. Runs on CPU. The jump from 0.86
 came from one fix — per-capture host stats (train/inference-consistent), which also made
 real-`.pcap` upload classify correctly.
 
@@ -67,7 +67,7 @@ and the new flow land in its constellation. (Fallback: a "simulate" chip.)
 
 ### Slide 8 — Honesty as a feature
 
-Few-shot generalization meets the KPI (**97.6%**). Crucially, **upload-any-`.pcap` works**:
+Few-shot generalization meets the KPI (**99.6%**). Crucially, **upload-any-`.pcap` works**:
 the same flow/feature pipeline runs at training and inference (incl. per-capture host stats),
 so a raw **browser** YouTube capture — a domain never seen in training — correctly reads
 `video_on_demand`. We also report the one weak spot: a pcap with only a *single* flow gives

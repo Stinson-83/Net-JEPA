@@ -21,8 +21,10 @@ and Phase 3 under a single leak-free split.
 | `video_on_demand` | Netflix, YouTube (Kaggle) · VLC_Netflix, VLC_Prime, VLC_YouTube (VLC) | 3,287 |
 | `web_browsing` | VLC_Web | 3,023 |
 
-**Total: 28,892 flows** → split leak-free into **20,224 pretrain / 4,333 downstream-train /
-4,335 test** (stratified 70/15/15; classes with <4 flows go to pretrain).
+**Total: 28,892 flows** → leak-free **70/70/30 full-supervision split**: **20,224 train** (used
+for *both* self-supervised pretraining **and** supervised SupCon + k-NN) and **8,668 test**
+(held out for evaluation only). Using all labels for the supervised stages lifts accuracy to
+**0.997** (leak-free verified); see [results.md §5.3](results.md).
 
 ## 3.2 The three sources
 
@@ -66,7 +68,9 @@ One script builds everything, identically for Kaggle CSVs and VLC/CG captures:
 5. **Features** (`features.py`): each flow → a 64×9 `packet_sequence` (size/1500,
    log1p(iat)/10, signed direction, protocol one-hot×4, rtt_norm, rtt_flag) + a 15-D
    `flow_context` (durations, flag ratios, per-capture host stats) + `padding_mask`.
-6. **Leak-free split** (stratified 70/15/15 by class; `split` column recorded) and write:
+6. **Leak-free split** (stratified **70/70/30** by class — the 70% train set is used for both
+   pretraining *and* supervised SupCon + k-NN; 30% held out for test; `split` column recorded)
+   and write:
    - `data/traffic_csvs/<type>.csv` — one row per flow with raw arrays (`packet_sizes`,
      `iats`, `directions`) + scalars + `app` reference col + `split` col (human-readable).
    - `data/processed_traffic/{pretrain,downstream_train,test,fewshot_eta*}.parquet` — the

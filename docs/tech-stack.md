@@ -58,6 +58,6 @@ JetBrains Mono (Google Fonts).
 
 ## 4.5 Why this stack
 
-- **CPU-first, edge-deployable** — PyTorch model is tiny; serving needs no GPU (~4.1 ms/flow).
+- **CPU-first, edge-deployable** — PyTorch model is tiny; serving needs no GPU (~3.5 ms/flow).
 - **No vendor lock-in** — every component is permissively licensed OSS.
 - **Reproducible** — one `requirements.txt`, one `npm install`, deterministic seeds.

@@ -130,7 +130,7 @@ Raw CSVs
    └─  padding_mask     (64,) bool — True = real packet
    │
    ▼  preprocess.py
-   Stratified 70/15/15 pretrain/downstream/test splits
+   Stratified 70/70/30 split: 70% train (pretrain = downstream, full supervision) / 30% test
    Few-shot subsets: η ∈ {1, 3, 5, 7, 10} labelled samples per class
    Output: data/processed/*.parquet + splits.json
 ```
@@ -313,13 +313,13 @@ PHASE 3 — Downstream Classification  (50 epochs)
 
 | Benchmark KPI | Target | Result |
 |---|---|---|
-| Intra-class cosine | > 0.7 | **0.94** ✅ |
-| Inter-class cosine | < 0.3 | **−0.01** ✅ |
-| Classification accuracy | ≥ 90% | **0.977** (kNN) ✅ |
-| Generalization (few-shot η≥3) | ≥ 85% | **0.976** ✅ |
-| Real-time per flow | < 100 ms | **4.1 ms** ✅ |
+| Intra-class cosine | > 0.7 | **0.98** ✅ |
+| Inter-class cosine | < 0.3 | **−0.04** ✅ |
+| Classification accuracy | ≥ 90% | **0.997** (kNN) ✅ |
+| Generalization (few-shot η≥3) | ≥ 85% | **0.996** ✅ |
+| Real-time per flow | < 100 ms | **3.5 ms** ✅ |
 
-macro-F1 **0.954**, silhouette **0.70**. Reaching the cosine targets needed two
+macro-F1 **0.992**, silhouette **0.87**. Reaching the cosine targets needed two
 things together: (1) **category-level SupCon** — the KPI defines class at the
 category level ("Youtube and Netflix" = intra), so app-level contrast would
 fight it; and (2) **common-mode removal** — SupCon separates class *directions*
@@ -333,7 +333,7 @@ In the 8-traffic-type model **all sources are supervised and mixed into one
 leak-free split** (Kaggle 5G + VLC + Xbox cloud-gaming), so there is no
 held-out "foreign testbed" — generalization is measured two ways:
 
-- **In-domain few-shot** (η=7 labelled/class, held-out flows): **0.976**.
+- **In-domain few-shot** (η=7 labelled/class, held-out flows): **0.996**.
 - **Real captures of the trained types**, run end-to-end through `infer_pcap.py`
   (the identical parse→flow→features→kNN path as training):
 
@@ -353,8 +353,8 @@ different capture domain from the VLC/Kaggle testbeds — still resolves correct
 globally over the whole dataset. Globally, a reused testbed client IP merged its
 destinations across every app → inflated values inference could never reproduce,
 which made real pcaps collapse to the wrong class. Switching to per-capture took
-the model **0.86 → 0.977** *and* fixed `.pcap` upload — both from one change
-(verified genuine: same-capture-excluded kNN = 0.9767).
+the model **0.86 → 0.997** *and* fixed `.pcap` upload — both from one change
+(verified genuine: same-capture-excluded kNN = 0.9967).
 
 **Known limitation (reported honestly):** a pcap with only a *single* flow yields
 degenerate host stats (`n_dst_ips=1`) unlike any multi-flow training capture and
@@ -484,7 +484,7 @@ python3 -m netjepa.scripts.train_phase2b --config $CFG \
 python3 -m netjepa.scripts.train_phase3  --config $CFG \
     --phase2_ckpt checkpoints/traffic8/phase2b/final.pt --ckpt_dir checkpoints/traffic8/phase3 --device cuda
 
-# 5. Full evaluation against test split  → kNN 0.977, macro-F1 0.954
+# 5. Full evaluation against test split  → kNN 0.997, macro-F1 0.992
 python3 -m netjepa.scripts.evaluate --config $CFG \
     --checkpoint checkpoints/traffic8/phase3/final.pt --device cuda
 

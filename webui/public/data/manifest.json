@@ -2,9 +2,9 @@
   "datasets": [
     {
       "id": "traffic8",
-      "name": "Traffic-8 (8 types)",
+      "name": "Traffic-8 (full-supervision)",
       "trained_on": "2026-06-21",
-      "n_flows": 10481
+      "n_flows": 11518
     }
   ],
   "active_dataset": "traffic8",

@@ -38,8 +38,8 @@
   full trained **8-traffic-type** Net-JEPA model (Phase-3 checkpoint `net_jepa_phase3.pt`, ~1.76M
   params: encoder + fusion + predictor + EMA target + pooling + embedding head + α-centering) plus
   the fitted cosine k-NN (`knn.joblib`), config, `labels.json` (the 8 type names), and model card
-  ([`docs/hf_model_card.md`](docs/hf_model_card.md)). Test KPIs: accuracy **97.7%**, macro-F1
-  **0.954**. Re-publishable from [`src/netjepa/scripts/publish_hf.py`](src/netjepa/scripts/publish_hf.py)
+  ([`docs/hf_model_card.md`](docs/hf_model_card.md)). Test KPIs: accuracy **99.7%**, macro-F1
+  **0.992**. Re-publishable from [`src/netjepa/scripts/publish_hf.py`](src/netjepa/scripts/publish_hf.py)
   (`HF_TOKEN=… python src/netjepa/scripts/publish_hf.py --repo-id <user>/net-jepa`); checkpoint is
   also reproducible end-to-end from the training scripts.
 - **Datasets Used** -
@@ -87,6 +87,6 @@ We adapted these ideas to **encrypted network-flow classification** and added ou
 contributions: a packet-shape flow encoder with RTT/context fusion, the α-centering
 ("isotropisation") trick that meets the inter-class cosine KPI, category-level SupCon on a kept
 embedding, **per-capture host-stat features that are train/inference-consistent** (the fix that
-took accuracy 0.86 → 0.977 and made real-`.pcap` upload classify correctly), and the
+took accuracy 0.86 → 0.997 and made real-`.pcap` upload classify correctly), and the
 "Signal Atlas" live demo. All OSS libraries we build on are credited in
 [docs/tech-stack.md](docs/tech-stack.md).

@@ -29,7 +29,7 @@ learns **self-supervised** by predicting masked parts of a flow against a slow-m
 **contrastive** fine-tune (SupCon) on the 8 traffic types, plus a **common-mode
 removal** (α-centering) trick, shapes a 128-D unit-sphere embedding where same-class flows
 point together and different-class flows are nearly orthogonal. A cosine **k-NN** then
-classifies in ~4.1 ms on CPU.
+classifies in ~3.5 ms on CPU.
 
 ## The eight traffic types
 
@@ -48,13 +48,13 @@ classifies in ~4.1 ms on CPU.
 
 | Benchmark KPI | Target | Achieved | How |
 |---|---|---|---|
-| Intra-class cosine | > 0.7 | **0.94** | Type SupCon on a kept, normalised embedding |
-| Inter-class cosine | < 0.3 | **−0.01** | α-centering removes the anisotropic common-mode |
-| Accuracy | ≥ 90% | **97.7%** | Cosine k-NN on the isotropised embedding |
-| Generalization | ≥ 85% | **97.6%** | Few-shot (η=7, held-out flows) |
-| Real-time | < 100 ms | **4.1 ms** (CPU) | Lightweight encoder, no GPU needed to serve |
+| Intra-class cosine | > 0.7 | **0.98** | Type SupCon on a kept, normalised embedding |
+| Inter-class cosine | < 0.3 | **−0.04** | α-centering removes the anisotropic common-mode |
+| Accuracy | ≥ 90% | **99.7%** | Cosine k-NN on the isotropised embedding |
+| Generalization | ≥ 85% | **99.6%** | Few-shot (η=7, held-out flows) |
+| Real-time | < 100 ms | **3.5 ms** (CPU) | Lightweight encoder, no GPU needed to serve |
 
-Plus **macro-F1 0.954** and silhouette **0.70**. See [results.md](results.md) for per-class
+Plus **macro-F1 0.992** and silhouette **0.87**. See [results.md](results.md) for per-class
 numbers, the per-capture-host-stats fix that drove them, and real-`.pcap` inference results.
 
 ## What makes it stand out
@@ -67,6 +67,6 @@ numbers, the per-capture-host-stats fix that drove them, and real-`.pcap` infere
   `video_on_demand`. See [results.md §5.5](results.md).
 - **Honest evaluation** — we report the one weak spot (single-flow snippets) rather than
   hiding it.
-- **Runs in real time on CPU** — ~4.1 ms/flow, deployable at the edge.
+- **Runs in real time on CPU** — ~3.5 ms/flow, deployable at the edge.
 - **A demo judges can *play* with** — a live "atlas" of real flows; drop in a `.pcap` and
   watch the model classify it. See [features.md](features.md).

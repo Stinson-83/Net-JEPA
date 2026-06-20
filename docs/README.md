@@ -29,11 +29,11 @@ Honest chronological research log (bugs, dead ends, fixes): [`../experimentation
 
 | Benchmark KPI | Target | Achieved |
 |---|---|---|
-| Intra-class cosine | > 0.7 | **0.94** ✅ |
-| Inter-class cosine | < 0.3 | **−0.01** ✅ |
-| Classification accuracy | ≥ 90% | **97.7%** ✅ |
-| Generalization (few-shot, η=7) | ≥ 85% | **97.6%** ✅ |
-| Real-time latency / flow | < 100 ms | **4.1 ms** (CPU) ✅ |
+| Intra-class cosine | > 0.7 | **0.98** ✅ |
+| Inter-class cosine | < 0.3 | **−0.04** ✅ |
+| Classification accuracy | ≥ 90% | **99.7%** ✅ |
+| Generalization (few-shot, η=7) | ≥ 85% | **99.6%** ✅ |
+| Real-time latency / flow | < 100 ms | **3.5 ms** (CPU) ✅ |
 
-macro-F1 **0.954** · silhouette **0.70** · 8 traffic types · 128-D embedding · self-supervised
+macro-F1 **0.992** · silhouette **0.87** · 8 traffic types · 128-D embedding · self-supervised
 on 20k flows · runs on CPU.

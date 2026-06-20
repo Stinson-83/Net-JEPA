@@ -14,7 +14,7 @@ model sees any data:
 1. **Parse** — extract ports, TCP flags (SYN/ACK/FIN/RST), and TLS Client/Server Hello markers.
 2. **Bidirectional flow grouping** — canonical 5-tuple key; 30 s idle split; flows kept at ≥ 5 and ≤ 64 packets. The client/device is the SYN initiator, else the **private/local endpoint**, else the first packet's source (so direction is correct on real mid-stream captures).
 3. **RTT extraction** — TCP handshake → TLS handshake → first-exchange fallback.
-4. **Per-capture host stats** — `n_dst_ips / n_dst_ports / n_src_ports / conn_per_sec` are computed **per capture** (per `source_file` at train time, per uploaded pcap at inference). This keeps the host-behaviour features both discriminative and identical between training and serving — the fix that took accuracy 0.86 → 0.977 (see [results.md §5.3](results.md)).
+4. **Per-capture host stats** — `n_dst_ips / n_dst_ports / n_src_ports / conn_per_sec` are computed **per capture** (per `source_file` at train time, per uploaded pcap at inference). This keeps the host-behaviour features both discriminative and identical between training and serving — the fix that took accuracy 0.86 → 0.997 (see [results.md §5.3](results.md)).
 5. **Feature tensors**
    - `packet_sequence` **(64 × 9)**: `[size/1500, log1p(IAT), signed direction, proto one-hot×4, rtt_norm, rtt_flag]`
    - `flow_context` **(15,)**: proto, durations, IAT stats, SYN/FIN/RST ratios, pkts/s, per-capture host stats, packet count, RTT
@@ -59,9 +59,9 @@ The downstream embedding is the part the cosine KPI measures, so it gets special
    are both `video_on_demand`).
 4. **α-centering** (`set_centering`, α≈0.65): SupCon separates class *directions* but leaves
    them in a shared cone (high absolute cosine). Subtracting α·mean and re-normalising
-   isotropises the space, dropping inter-class cosine to ≈ −0.01 while intra stays ≈ 0.94.
+   isotropises the space, dropping inter-class cosine to ≈ −0.04 while intra stays ≈ 0.98.
 
-Classification is a **cosine k-NN (k=5)** over the labelled embeddings — ~4.1 ms on CPU.
+Classification is a **cosine k-NN (k=5)** over the labelled embeddings — ~3.5 ms on CPU.
 
 ---
 
@@ -71,9 +71,9 @@ Classification is a **cosine k-NN (k=5)** over the labelled embeddings — ~4.1 
 
 | Phase | Data | What it does |
 |---|---|---|
-| **1 — Pretrain** (150 ep) | ~20k flows, **labels ignored** | Self-supervised JEPA (VICReg + masking + EMA) |
-| **2b — SupCon** (120 ep) | downstream train (labelled, 8 types) | Traffic-type contrastive on the kept embedding + α-centering. Init from Phase 1. |
-| **3 — Heads** (50 ep) | downstream train | Freeze encoder; fit k-NN + class-weighted linear/MLP heads; save `knn.joblib` |
+| **1 — Pretrain** (150 ep) | ~20k flows (full 70% train), **labels ignored** | Self-supervised JEPA (VICReg + masking + EMA) |
+| **2b — SupCon** (120 ep) | full training set (labelled, 8 types) — the same 70% as pretrain | Traffic-type contrastive on the kept embedding + α-centering. Init from Phase 1. |
+| **3 — Heads** (50 ep) | full training set (== pretrain) | Freeze encoder; fit k-NN + class-weighted linear/MLP heads; save `knn.joblib` |
 | *2c — DANN* (optional) | + unlabelled target | Domain-adversarial adaptation for cross-domain transfer |
 
 (Phase 2 — an unsupervised contrastive refinement — is retained but skipped in the

@@ -48,7 +48,7 @@ embedding to predict one of 8 traffic types.
 - **Supervised sharpening:** traffic-type-level **SupCon** on the kept embedding, then
   **α-centering** (common-mode removal, α≈0.65) to isotropise the space.
 - **Classifier:** cosine **k-NN (k=5)**.
-- **Size / speed:** ~1.76 M parameters; **~4.1 ms / flow on CPU** (no GPU needed to serve).
+- **Size / speed:** ~1.76 M parameters; **~3.5 ms / flow on CPU** (no GPU needed to serve).
 
 ### The eight traffic types
 
@@ -59,14 +59,14 @@ embedding to predict one of 8 traffic types.
 
 | Benchmark KPI | Target | Achieved |
 |---|---|---|
-| Intra-class cosine | > 0.7 | **0.94** |
-| Inter-class cosine | < 0.3 | **−0.01** |
-| Classification accuracy | ≥ 90% | **97.7%** |
-| Generalization (few-shot, η=7) | ≥ 85% | **97.6%** |
-| Real-time latency / flow | < 100 ms | **4.1 ms** (CPU) |
+| Intra-class cosine | > 0.7 | **0.98** |
+| Inter-class cosine | < 0.3 | **−0.04** |
+| Classification accuracy | ≥ 90% | **99.7%** |
+| Generalization (few-shot, η=7) | ≥ 85% | **99.6%** |
+| Real-time latency / flow | < 100 ms | **3.5 ms** (CPU) |
 
-macro-F1 **0.954** · silhouette **0.70**. Per-class F1 ranges 0.885 (video conferencing, the
-rarest / hardest) to 0.995 (metaverse). Full numbers: see the repo's `docs/results.md`.
+macro-F1 **0.992** · silhouette **0.87**. Per-class F1 ranges 0.971 (cloud gaming, the rarest /
+hardest) to 1.000 (metaverse). Full numbers: see the repo's `docs/results.md`.
 
 ## How to use
 
@@ -112,7 +112,7 @@ All datasets are **public**; the current model trains on **8 traffic types, all 
 - [Zenodo · VLC / Valencia](https://zenodo.org/records/15121418) (**CC-BY-4.0**) — full VLC set: Spotify → audio_streaming, Web → web_browsing, Netflix/Prime/YouTube → video_on_demand, Roblox → metaverse, Teams → video_conferencing.
 - [Kaggle · Cloud Gaming Network Telemetry](https://www.kaggle.com/datasets/carloshfm/cloud-gaming-network-telemetry) (**BSD-3**) — Xbox Cloud over 5G → cloud_gaming.
 
-28,892 flows → 20,224 pretrain / 4,333 downstream-train / 4,335 test (leak-free stratified split).
+28,892 flows → 20,224 train (pretrain = downstream) / 8,668 test (30%) (leak-free stratified split, full supervision).
 
 ## Intended use & limitations
 
