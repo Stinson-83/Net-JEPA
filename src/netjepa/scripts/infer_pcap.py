@@ -134,7 +134,11 @@ def main() -> None:
     labels = CATEGORY_LABELS
     if args.labels:
         p = _resolve(args.labels)
-        if p.suffix == '.json' and p.is_file():
+        if args.labels.endswith('.json') or p.suffix == '.json':
+            # a .json path was given -> it MUST exist; don't silently treat the path as a label
+            if not p.is_file():
+                sys.exit(f"--labels points at a .json file that does not exist: {p}\n"
+                         f"(copy labels.json next to it, or pass a comma-list of class names)")
             import json
             d = json.load(open(p)); labels = d.get('traffic_types', d) if isinstance(d, dict) else d
         else:
