@@ -119,10 +119,19 @@ def main() -> None:
     if not flows:
         sys.exit('no flows parsed — did you run convert_vlc_pcap.py / is --raw_dir correct?')
 
-    # ── RTT + cross-flow host stats ──
+    # ── RTT + host stats ──
     for fl in flows:
         fl['rtt'], fl['rtt_valid'] = extract_rtt(fl['packets'], fl['client_ip'])
-    src_stats = compute_src_host_stats(flows)
+    # Host stats MUST be computed per-capture (per source_file), exactly like inference
+    # computes them over a single uploaded pcap. Computing them globally over every
+    # capture merged a reused client IP's destinations across all apps -> inflated
+    # n_dst_ips/n_dst_ports the model could never see again at inference (a single pcap),
+    # which made real pcaps collapse to the wrong class. Group by source_file so the
+    # training host-stat distribution matches what infer_pcap/server produce.
+    flows_by_file = defaultdict(list)
+    for fl in flows:
+        flows_by_file[fl['source_file']].append(fl)
+    src_stats_by_file = {sf: compute_src_host_stats(fls) for sf, fls in flows_by_file.items()}
 
     # ── leak-free per-class split (stratified 70/15/15; rare classes -> pretrain) ──
     labels = np.array([TYPE2ID[fl['category_label']] for fl in flows])
@@ -148,6 +157,7 @@ def main() -> None:
     for i, fl in enumerate(flows):
         pkts, client = fl['packets'], fl['client_ip']
         sizes, iats, dirs = _raw_arrays(pkts, client)
+        src_stats = src_stats_by_file[fl['source_file']]       # per-capture, matches inference
         st = src_stats.get(client, {})
         ttype = fl['category_label']; split = split_of[i]
         csv_rows[ttype].append({
