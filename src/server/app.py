@@ -200,16 +200,11 @@ def _load_runtime() -> None:
         _maybe_fetch_weights()
         if not Path(NETJEPA_CKPT).is_file():
             raise FileNotFoundError(f'checkpoint not found: {NETJEPA_CKPT}')
-        if not UMAP_PATH.is_file():
-            raise FileNotFoundError(
-                f'fitted projector not found: {UMAP_PATH} — re-run '
-                'netjepa/scripts/export_artifacts.py to generate umap.joblib')
 
         import joblib
         _labels = NETJEPA_LABELS if Path(NETJEPA_LABELS).is_file() else None
         _state['model']   = NetJEPAClassifier.load(NETJEPA_CKPT, knn_path=KNN_PATH or None,
                                                    labels=_labels)
-        _state['reducer'] = joblib.load(UMAP_PATH)
 
         umap_json = DATASET_DIR / 'embeddings_umap.json'
         _state['seed_points'] = json.loads(umap_json.read_text()) if umap_json.is_file() else []
@@ -224,6 +219,21 @@ def _load_runtime() -> None:
         if manifest.is_file():
             _state['classes'] = json.loads(manifest.read_text()).get('classes', [])
 
+        # The UMAP reducer is OPTIONAL — it only refines the 2-D galaxy position.
+        # Its joblib pickle can be Python-version-specific (e.g. fitted on 3.10,
+        # served on 3.13 → "code() argument … must be str, not int"), so a load
+        # failure must NOT take down classification. Fall back to class-centroid
+        # projection (see _project_xy) when it's missing or unloadable.
+        _state['reducer'] = None
+        if UMAP_PATH.is_file():
+            try:
+                _state['reducer'] = joblib.load(UMAP_PATH)
+            except Exception as exc:  # noqa: BLE001
+                print(f'[net-jepa] UMAP reducer unloadable ({exc}); using centroid '
+                      'fallback for 2-D projection. Classification is unaffected.')
+        else:
+            print(f'[net-jepa] no UMAP reducer at {UMAP_PATH}; using centroid fallback.')
+
         # Replay any previously-persisted live points back into memory.
         _state['live_points'] = _load_jsonl(LIVE_STORE)
 
@@ -235,6 +245,28 @@ def _emit_threadsafe(loop: asyncio.AbstractEventLoop, event: dict) -> None:
     asyncio.run_coroutine_threadsafe(_queue.put(event), loop)
 
 
+def _project_xy(emb: 'np.ndarray', label: str, idx: int) -> tuple:
+    """Project a 128-D embedding to the galaxy's 2-D space. Uses the fitted UMAP
+    reducer when available; otherwise (e.g. the reducer pickle won't load on this
+    Python) falls back to the predicted class's centroid in the seed cloud, with a
+    small deterministic golden-angle offset so stacked points stay separable."""
+    reducer = _state.get('reducer')
+    if reducer is not None:
+        try:
+            xy = reducer.transform(emb)[0]
+            return float(xy[0]), float(xy[1])
+        except Exception:  # noqa: BLE001
+            pass
+    pts = [p for p in _state.get('seed_points', []) if p.get('label') == label]
+    if pts:
+        cx = sum(p['x'] for p in pts) / len(pts)
+        cy = sum(p['y'] for p in pts) / len(pts)
+    else:
+        cx = cy = 0.0
+    ang = idx * 2.399963229728653  # golden angle (rad)
+    return cx + 0.8 * math.cos(ang), cy + 0.8 * math.sin(ang)
+
+
 def _infer_pcap_worker(loop: asyncio.AbstractEventLoop,
                        pcap_path: str) -> List[dict]:
     """Runs in a worker thread. Parses the pcap, classifies + projects every
@@ -242,9 +274,8 @@ def _infer_pcap_worker(loop: asyncio.AbstractEventLoop,
     def emit(ev: dict) -> None:
         _emit_threadsafe(loop, ev)
 
-    model   = _state['model']
-    reducer = _state['reducer']
-    if model is None or reducer is None:
+    model = _state['model']
+    if model is None:
         emit({'stage': 'error', 'error': _state.get('load_error') or 'model not loaded'})
         return []
 
@@ -282,9 +313,8 @@ def _infer_pcap_worker(loop: asyncio.AbstractEventLoop,
               'label': pred.category, 'app': pred.label,
               'confidence': round(float(pred.confidence), 4)})
 
-        emb = np.asarray(pred.embedding, dtype=np.float32).reshape(1, -1)
-        xy  = reducer.transform(emb)[0]
-        x, y = float(xy[0]), float(xy[1])
+        emb  = np.asarray(pred.embedding, dtype=np.float32).reshape(1, -1)
+        x, y = _project_xy(emb, pred.category, idx)
 
         point = {
             'id':           flow_id,
@@ -353,9 +383,10 @@ async def _fanout() -> None:
 @app.get('/api/health')
 async def health() -> JSONResponse:
     return JSONResponse({
-        'ok':          _state['load_error'] is None,
+        'ok':          _state['load_error'] is None and _state['model'] is not None,
         'dataset':     DATASET_ID,
         'error':       _state['load_error'],
+        'projection':  'umap' if _state.get('reducer') is not None else 'centroid-fallback',
         'seed_points': len(_state['seed_points']),
         'live_points': len(_state['live_points']),
         'classes':     _state['classes'],
