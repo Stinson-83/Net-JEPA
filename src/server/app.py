@@ -55,8 +55,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from capture.pcap_replay import PcapReplay
-from flows.flow_table import FlowTable
 from model.netjepa_classifier import NetJEPAClassifier
 
 # ── Configuration ─────────────────────────────────────────────────────────────

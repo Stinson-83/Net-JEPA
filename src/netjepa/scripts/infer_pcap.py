@@ -112,6 +112,8 @@ def main() -> None:
     ap.add_argument("--labels", default=None,
                     help="labels.json (with 'traffic_types') or comma-list, to name the predicted "
                          "classes (default: the built-in 6 categories). Use for the 8-class model.")
+    ap.add_argument("--min-conf", type=float, default=0.5,
+                    help="confidence threshold for the conf-filtered summary line (default: 0.5)")
     args = ap.parse_args()
 
     pcap = _resolve(args.pcap)
@@ -157,6 +159,8 @@ def main() -> None:
     host_stats = compute_src_host_stats(flows)                  # across ALL flows, like training
 
     counts: dict[str, int] = {}
+    weighted: dict[str, float] = {}                              # votes weighted by packet count
+    confident: dict[str, int] = {}                              # flows above the confidence threshold
     for i, flow in enumerate(flows, 1):
         pkts, client = flow['packets'], flow['client_ip']
         rtt, rtt_valid = extract_rtt(pkts, client)
@@ -174,7 +178,11 @@ def main() -> None:
         top3 = [(labels[int(classes[j])] if int(classes[j]) < len(labels) else f"class{int(classes[j])}",
                  float(proba[j])) for j in order[:3] if proba[j] > 0]
         pred = top3[0][0] if top3 else "unknown"
+        conf = top3[0][1] if top3 else 0.0
         counts[pred] = counts.get(pred, 0) + 1
+        weighted[pred] = weighted.get(pred, 0.0) + len(pkts)     # bigger flows count more
+        if conf >= args.min_conf:
+            confident[pred] = confident.get(pred, 0) + 1
 
         syn = sum(p['is_syn'] for p in pkts); fin = sum(p['is_fin'] for p in pkts); rst = sum(p['is_rst'] for p in pkts)
         dur = pkts[-1]['time'] - pkts[0]['time']
@@ -183,7 +191,20 @@ def main() -> None:
                   f"rtt={'valid' if rtt_valid else 'none'}({rtt:.3f}s)")
             print(f"   => {pred}   (" + ", ".join(f"{c} {p*100:.0f}%" for c, p in top3) + ")")
 
-    print("\nSummary:", ", ".join(f"{k}={v}" for k, v in sorted(counts.items())))
+    print("\nSummary (flow counts):",
+          ", ".join(f"{k}={v}" for k, v in sorted(counts.items())))
+    total_pkts = sum(weighted.values()) or 1.0
+    print("Summary (packet-weighted):",
+          ", ".join(f"{k}={v/total_pkts*100:.0f}%"
+                    for k, v in sorted(weighted.items(), key=lambda kv: -kv[1])))
+    if confident:
+        print(f"Summary (conf>={args.min_conf:.0%}):",
+              ", ".join(f"{k}={v}" for k, v in sorted(confident.items())))
+    # The packet-weighted top class is the most reliable read on "what is this capture":
+    # a handful of short setup/keepalive flows can't outvote the sustained media flow.
+    dominant = max(weighted.items(), key=lambda kv: kv[1])
+    print(f"\nDominant traffic type (by packets): {dominant[0]} "
+          f"({dominant[1]/total_pkts*100:.0f}% of packets)")
 
 
 if __name__ == "__main__":

@@ -21,11 +21,37 @@ def _flow_key(row) -> tuple:
     return (frozenset([a, b]), row['protocol_id'])
 
 
+import ipaddress as _ipaddr
+
+_PRIVATE_NETS = [_ipaddr.ip_network(c) for c in (
+    '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.0/8',
+    '100.64.0.0/10', 'fc00::/7', 'fe80::/10')]
+
+
+def _is_private(ip: str) -> bool:
+    try:
+        addr = _ipaddr.ip_address(ip)
+        return any(addr in n for n in _PRIVATE_NETS)
+    except ValueError:
+        return False
+
+
 def _identify_client(packets: list[dict]) -> str:
+    # 1) the side that initiated the TCP handshake (clean captures — same as before)
     for p in packets:
         if p['is_syn'] and not p['is_syn_ack']:
             return p['src_ip']
-    # UDP/QUIC fallback: source of first packet
+    # 2) no SYN (UDP/QUIC, or a flow captured mid-stream): the local *device* is the
+    #    private endpoint. This keeps direction correct on real pcaps grabbed mid-
+    #    connection, where the first packet may be the *server's*. For clean training
+    #    captures the first packet is already the private device, so this is a no-op.
+    a, b = packets[0]['src_ip'], packets[0]['dst_ip']
+    a_priv, b_priv = _is_private(a), _is_private(b)
+    if a_priv and not b_priv:
+        return a
+    if b_priv and not a_priv:
+        return b
+    # 3) fallback: source of the first packet
     return packets[0]['src_ip']
 
 
