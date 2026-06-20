@@ -109,6 +109,9 @@ def main() -> None:
     ap.add_argument("--max-packets", type=int, default=64, help="max packets per flow (training default: 64)")
     ap.add_argument("--flow-timeout", type=float, default=30.0, help="idle split seconds (training default: 30)")
     ap.add_argument("--hf-repo", default="kritikahd007/net-jepa")
+    ap.add_argument("--labels", default=None,
+                    help="labels.json (with 'traffic_types') or comma-list, to name the predicted "
+                         "classes (default: the built-in 6 categories). Use for the 8-class model.")
     args = ap.parse_args()
 
     pcap = _resolve(args.pcap)
@@ -125,6 +128,16 @@ def main() -> None:
                                        compute_src_host_stats)
     from netjepa.data.rtt import extract_rtt
     from model.netjepa_classifier import NetJEPAClassifier, CATEGORY_LABELS
+
+    labels = CATEGORY_LABELS
+    if args.labels:
+        p = _resolve(args.labels)
+        if p.suffix == '.json' and p.is_file():
+            import json
+            d = json.load(open(p)); labels = d.get('traffic_types', d) if isinstance(d, dict) else d
+        else:
+            labels = [s.strip() for s in args.labels.split(',') if s.strip()]
+    print(f"classes ({len(labels)}): {labels}")
 
     print(f"Loading model: {ckpt}")
     model = NetJEPAClassifier.load(str(ckpt), knn_path=str(knn))
@@ -158,7 +171,8 @@ def main() -> None:
         proba = model._knn.predict_proba(emb)[0]
         classes = model._knn.classes_
         order = np.argsort(proba)[::-1]
-        top3 = [(CATEGORY_LABELS[int(classes[j])], float(proba[j])) for j in order[:3] if proba[j] > 0]
+        top3 = [(labels[int(classes[j])] if int(classes[j]) < len(labels) else f"class{int(classes[j])}",
+                 float(proba[j])) for j in order[:3] if proba[j] > 0]
         pred = top3[0][0] if top3 else "unknown"
         counts[pred] = counts.get(pred, 0) + 1
 
