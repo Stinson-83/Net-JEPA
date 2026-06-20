@@ -39,3 +39,7 @@ Net-JEPA_Deck.pptx
 scripts_deck/
 NetJEPA_Architecture.png
 NetJEPA_Architecture.pdf
+
+# 8-class common-traffic-type dataset (Kaggle-derived, rebuilt from build_traffic_dataset.py)
+data/traffic_csvs/
+data/processed_traffic/

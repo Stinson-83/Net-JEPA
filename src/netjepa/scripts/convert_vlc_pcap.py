@@ -54,6 +54,8 @@ VLC_FILE_MAP: dict[str, str] = {
     'teams':   'VLC_Teams',     # MS Teams → ms_teams (boosts the starved video_conf class)
     'roblox':  'VLC_Roblox',    # filed under metaverse, per Net-JEPA's taxonomy
     'xbox':    'CG_Xbox',       # Xbox Cloud Gaming (5G) → game_streaming
+    'spotify': 'VLC_Spotify',   # → audio_streaming (common-traffic-type taxonomy)
+    'web':     'VLC_Web',       # general web browsing → web_browsing
 }
 
 CSV_HEADER = ['No.', 'Time', 'Source', 'Destination', 'Protocol', 'Length', 'Info']

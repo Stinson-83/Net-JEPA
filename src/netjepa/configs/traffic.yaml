@@ -1,0 +1,80 @@
+data:
+  raw_data_dir: /indian-slp/Users/ug/ZEPA/Kritik/net_data/5G_Traffic_Datasets
+  processed_dir: data/processed_traffic
+  max_packets: 64
+  min_packets: 5
+  flow_timeout_seconds: 30
+  pretrain_split: 0.7
+  downstream_split: 0.15
+  test_split: 0.15
+model:
+  d_model: 128
+  n_heads: 4
+  n_transformer_layers: 4
+  dim_feedforward: 256
+  dropout: 0.1
+  packet_feature_dim: 9
+  flow_context_dim: 15
+  n_predictor_layers: 3
+  n_protocol_classes: 4
+training:
+  phase1_epochs: 150
+  phase2_epochs: 50
+  phase2b_epochs: 120
+  phase3_epochs: 50
+  batch_size: 128
+  lr_phase1: 0.001
+  lr_phase2: 0.0005
+  lr_phase3: 0.001
+  lr_phase2b_encoder: 0.0003
+  lr_phase2b_head: 0.001
+  supcon_temperature: 0.05
+  weight_decay: 0.0001
+  ema_momentum_start: 0.99
+  ema_momentum_end: 0.999
+  ema_warmup_epochs: 100
+  dbscan_refresh_phase1: 10
+  dbscan_refresh_phase2: 5
+  dbscan_start_epoch: 20
+  dbscan_subsample_fraction: 1.0
+  dbscan_eps: 0.05
+  dbscan_min_samples: 5
+loss:
+  vicreg_alpha: 25.0
+  vicreg_beta: 25.0
+  vicreg_gamma: 1.0
+  lambda1: 1.0
+  lambda2: 0.3
+  contrastive_margin: 0.5
+  running_mean_window: 100
+augmentation:
+  change_rtt_prob: 0.8
+  change_rtt_alpha_min: 0.5
+  change_rtt_alpha_max: 1.5
+  time_shift_prob: 0.5
+  time_shift_b_min: -1.0
+  time_shift_b_max: 1.0
+  packet_loss_prob: 0.5
+  packet_loss_window: 0.2
+  rtt_mask_prob: 0.4
+masking:
+  short_flow_threshold: 30
+  short_flow_ratio: 0.3
+  normal_flow_ratio: 0.5
+evaluation:
+  cosine_sim_pairs: 10000
+  topk_pairs_k: 5
+  fewshot_eta_values:
+  - 1
+  - 3
+  - 5
+  - 7
+  - 10
+  fewshot_repeats: 10
+  latency_trials: 1000
+downstream:
+  embedding_dim: 128
+  center_alpha: 0.65
+  knn_k: 5
+  num_classes: 15
+  num_categories: 8
