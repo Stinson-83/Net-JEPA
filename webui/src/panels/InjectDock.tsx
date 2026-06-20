@@ -59,6 +59,38 @@ export default function InjectDock() {
           <div className="my-3 h-px w-full" style={{ background: 'var(--nj-border)' }} />
           <PipelineTheatre />
 
+          {(() => {
+            const bd = sessions.find((s) => s.projection?.breakdown)?.projection?.breakdown;
+            if (!bd) return null;
+            const entries = Object.entries(bd.packetPct);   // server pre-sorts desc
+            const dom = categoryMeta(bd.dominant ?? '');
+            return (
+              <div className="mt-2.5">
+                <div className="flex items-center gap-2 text-[9.5px] uppercase tracking-wider text-[var(--nj-text-faint)]">
+                  <span>Capture breakdown</span>
+                  <span className="normal-case tracking-normal">
+                    {bd.nFlows} flows · dominant <span style={{ color: dom.color }}>{dom.short}</span>
+                  </span>
+                </div>
+                <div className="mt-1.5 space-y-1">
+                  {entries.map(([label, pct]) => {
+                    const m = categoryMeta(label);
+                    return (
+                      <div key={label} className="flex items-center gap-2 text-[10px]">
+                        <span className="w-28 shrink-0 truncate" style={{ color: m.color }}>{m.short}</span>
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: 'var(--nj-glass)' }}>
+                          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: m.color }} />
+                        </div>
+                        <span className="nj-num w-9 text-right opacity-80">{pct.toFixed(0)}%</span>
+                        <span className="nj-num w-7 text-right opacity-50">{bd.flowCounts[label] ?? 0}f</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
           {sessions.length > 0 && (
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
               <span className="text-[9.5px] uppercase tracking-wider text-[var(--nj-text-faint)]">Landed</span>

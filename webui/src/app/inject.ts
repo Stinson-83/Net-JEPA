@@ -83,11 +83,21 @@ export async function injectFile(file: File): Promise<void> {
   let settled = false;
   const serverInfer: Promise<ProjectionResult | null> = useServer
     ? inferPcapOnServer(file)
-      .then(async (added) => {
-        if (!added || added.length === 0) return null;
+      .then(async (res) => {
+        if (!res || res.added.length === 0) return null;
         await useStore.getState().refreshBundle();
-        const pt: UmapPoint = added[0];
-        return { x: pt.x, y: pt.y, label: pt.label, confidence: pt.confidence };
+        const s = res.summary;
+        const pt: UmapPoint = res.added[0];
+        // Headline = the packet-weighted DOMINANT type over all flows (matches the
+        // terminal), not just the first flow. Land it in that constellation, and
+        // attach the full per-class breakdown so a mixed capture shows every type.
+        const dominant = s?.dominant ?? pt.label;
+        const c = classCentroid(dominant);
+        const conf = s ? (s.packet_pct[dominant] ?? 0) / 100 : pt.confidence;
+        const breakdown = s
+          ? { nFlows: s.n_flows, flowCounts: s.flow_counts, packetPct: s.packet_pct, dominant }
+          : undefined;
+        return { x: c?.x ?? pt.x, y: c?.y ?? pt.y, label: dominant, confidence: conf, breakdown };
       })
       .catch(() => null)
       .finally(() => { settled = true; })

@@ -322,6 +322,7 @@ def _infer_pcap_worker(loop: asyncio.AbstractEventLoop,
             'y':            y,
             'label':        pred.category,
             'confidence':   round(float(pred.confidence), 3),
+            'packets':      len(pkts),
             'flow_summary': _flow_summary(pkts),
             'source':       'live',
             'ts':           time.time(),
@@ -415,6 +416,25 @@ async def metrics() -> JSONResponse:
     })
 
 
+def _summarize(added: List[dict]) -> dict:
+    """Per-pcap class breakdown over ALL classified flows — so a capture that
+    contains a mix (e.g. video + the web traffic around it) reports every type,
+    not just one. flow_counts + packet-weighted percentages + the dominant type
+    (same logic as the terminal infer_pcap.py)."""
+    counts: dict = {}
+    weighted: dict = {}
+    for p in added:
+        lab = p.get('label', 'unknown')
+        counts[lab] = counts.get(lab, 0) + 1
+        weighted[lab] = weighted.get(lab, 0) + int(p.get('packets', 1))
+    total = sum(weighted.values()) or 1
+    pct = {k: round(100 * v / total, 1)
+           for k, v in sorted(weighted.items(), key=lambda kv: -kv[1])}
+    dominant = max(weighted.items(), key=lambda kv: kv[1])[0] if weighted else None
+    return {'n_flows': len(added), 'flow_counts': counts,
+            'packet_pct': pct, 'dominant': dominant}
+
+
 @app.post('/api/infer')
 async def infer(file: UploadFile = File(...)) -> JSONResponse:
     if _state['load_error'] is not None:
@@ -438,6 +458,7 @@ async def infer(file: UploadFile = File(...)) -> JSONResponse:
         'added':      [{k: v for k, v in p.items() if k != 'embedding'} for p in added],
         'count':      len(added),
         'total_live': len(_state['live_points']),
+        'summary':    _summarize(added),
     })
 
 

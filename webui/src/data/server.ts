@@ -88,15 +88,25 @@ export async function fetchServerMetrics(): Promise<MetricsData | null> {
  * points it just added. null if the server is unavailable or errored — caller
  * falls back to the heuristic projector.
  */
-export async function inferPcapOnServer(file: File): Promise<UmapPoint[] | null> {
+export interface InferServerResult {
+  added: UmapPoint[];
+  summary?: {
+    n_flows: number;
+    flow_counts: Record<string, number>;
+    packet_pct: Record<string, number>;
+    dominant: string | null;
+  };
+}
+
+export async function inferPcapOnServer(file: File): Promise<InferServerResult | null> {
   if (!(await serverHealthy(true))) return null;
   try {
     const form = new FormData();
     form.append('file', file, file.name);
     const res = await fetch(`${SERVER_URL}/api/infer`, { method: 'POST', body: form });
     if (!res.ok) return null;
-    const data = (await res.json()) as { added?: UmapPoint[] };
-    return data.added ?? [];
+    const data = (await res.json()) as InferServerResult;
+    return { added: data.added ?? [], summary: data.summary };
   } catch {
     return null;
   }

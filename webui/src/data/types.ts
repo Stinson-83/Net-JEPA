@@ -172,11 +172,21 @@ export interface InjectedFlow {
   featureVector: number[];
 }
 
+/** Per-pcap class breakdown over ALL flows (so a mixed capture reports every
+ * type, not just one). Mirrors the server's /api/infer `summary`. */
+export interface InferBreakdown {
+  nFlows: number;
+  flowCounts: Record<string, number>;
+  packetPct: Record<string, number>;   // label -> % of packets (sorted desc)
+  dominant: string | null;
+}
+
 export interface ProjectionResult {
   x: number;
   y: number;
   label: string;
   confidence: number;
+  breakdown?: InferBreakdown;
 }
 
 export type AnimationStageId =
