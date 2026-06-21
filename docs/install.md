@@ -63,6 +63,31 @@ python -m netjepa.scripts.evaluate --config src/netjepa/configs/traffic.yaml \
 
 **Or just `make reproduce`** (= `make install fetch evaluate`).
 
+### Way 1b — reproduce **without Kaggle**, from the committed CSVs
+
+No Kaggle account or raw-capture download is needed: the derived feature CSVs are committed
+(`data/traffic_csvs/`), so the parquet tensors can be rebuilt directly from them, and the
+weights come from Hugging Face. One command:
+
+```bash
+make reproduce-local        # = HF weights (no token) + rebuild parquet from CSVs + evaluate
+```
+
+Equivalently, by hand:
+
+```bash
+python src/netjepa/scripts/fetch_assets.py --weights-only          # checkpoint from HF (no Kaggle)
+python -m netjepa.scripts.build_traffic_dataset --from-csvs \
+    --csv_out data/traffic_csvs --parquet_out data/processed_traffic   # CSVs → parquet (no Kaggle)
+python -m netjepa.scripts.evaluate --config src/netjepa/configs/traffic.yaml \
+    --checkpoint checkpoints/traffic8/phase3/final.pt
+```
+
+`--from-csvs` reconstructs each flow's tensors with the **same** feature functions used in
+training and honours the CSVs' recorded `split`, so the train/test partition (20,224 / 8,668)
+and the KPIs match the published model (verified: kNN **0.997**, macro-F1 **0.992**,
+silhouette **0.87**).
+
 ### Way 2 — from scratch: train everything → see *Train from scratch* below.
 
 ### Run the live demo (either way)
@@ -87,7 +112,18 @@ drive it: [user-guide.md](user-guide.md).
 
 ## Train from scratch — the 8-traffic-type model
 
-Shortcut: **`make train DEVICE=cuda`** (run `make fetch-data` first). The 8-class pipeline uses
+**One command, from base** (download datasets → convert to CSVs + build → train → evaluate):
+
+```bash
+make reproduce-full DEVICE=cuda
+#   = fetch-data (Kaggle 5G + VLC + cloud-gaming → convert pcaps → CSVs + parquet)
+#     → train phase1 → phase2b → phase3 → evaluate
+#   needs Kaggle creds (KAGGLE_USERNAME/KAGGLE_KEY or ~/.kaggle/kaggle.json) and is a LARGE
+#   download (VLC ≈23 GB + cloud-gaming ≈28 GB). Use DEVICE=cpu if you have no GPU (slower).
+```
+
+To run the two halves separately: **`make fetch-data`** (download + convert + build) then
+**`make train DEVICE=cuda`** (phase1 → phase2b → phase3 → evaluate). The 8-class pipeline uses
 `src/netjepa/configs/traffic.yaml` (sets `processed_dir=data/processed_traffic`,
 `num_categories=8`) and writes to `checkpoints/traffic8/`.
 

@@ -69,9 +69,92 @@ def _raw_arrays(packets: list[dict], client_ip: str):
     return sizes, iats, dirs
 
 
+def build_parquet_from_csvs(csv_dir: Path, pq_out: Path, seed: int = 42) -> None:
+    """Rebuild the parquet tensors + labels.json directly from the committed feature
+    CSVs in `csv_dir` — no raw captures, no Kaggle download.
+
+    Each CSV row carries the raw per-flow arrays (packet_sizes / iats / directions),
+    the flow scalars, the per-capture host stats, and the leak-free `split`. We
+    reconstruct the packet list and recompute the exact same tensors as the raw path
+    (`compute_packet_sequence` / `compute_flow_context`), and honour the CSVs' recorded
+    split, so the train/test partition matches the published model exactly.
+    """
+    def _as_bool(v) -> bool:
+        return v == 'True' if isinstance(v, str) else bool(v)
+
+    csvs = sorted(csv_dir.glob('*.csv'))
+    if not csvs:
+        sys.exit(f'no CSVs in {csv_dir} — expected the committed data/traffic_csvs/*.csv')
+
+    records, n_skipped = [], 0
+    for f in csvs:
+        df = pd.read_csv(f)
+        for r in df.itertuples(index=False):
+            sizes = json.loads(r.packet_sizes); iats = json.loads(r.iats); dirs = json.loads(r.directions)
+            n = len(sizes)
+            if n < 5:
+                n_skipped += 1; continue
+            syn, fin, rst, pid = int(r.syn_count), int(r.fin_count), int(r.rst_count), int(r.protocol_id)
+            t, pkts = 0.0, []
+            for i in range(n):
+                t += float(iats[i])
+                pkts.append({
+                    'length': int(sizes[i]), 'time': t,
+                    'src_ip': 'C' if dirs[i] == 1 else 'S', 'dst_ip': 'S' if dirs[i] == 1 else 'C',
+                    'protocol_id': pid,
+                    'is_syn': i < syn, 'is_ack': False, 'is_syn_ack': False,
+                    'is_fin': i < fin, 'is_rst': i < rst,
+                    'is_client_hello': False, 'is_server_hello': False,
+                })
+            hs = {'C': {'n_dst_ips': int(r.n_dst_ips), 'n_dst_ports': int(r.n_dst_ports),
+                        'n_src_ports': int(r.n_src_ports), 'conn_per_sec': float(r.conn_per_sec)}}
+            rtt, rv = float(r.rtt), _as_bool(r.rtt_valid)
+            seq, mask = compute_packet_sequence(pkts, 'C', rtt, rv)
+            ctx = compute_flow_context(pkts, 'C', rtt, rv, hs)
+            cid = TYPE2ID[str(r.traffic_type)]
+            records.append({'packet_sequence': seq.tolist(), 'padding_mask': mask.tolist(),
+                            'flow_context': ctx.tolist(), 'category_label': cid, 'app_label': cid,
+                            'rtt_valid': rv, 'source_file': str(r.app), 'split': str(r.split)})
+    if not records:
+        sys.exit('no flows reconstructed from CSVs.')
+
+    df_all = pd.DataFrame(records)
+    # Full-supervision 70/70/30: train (pretrain == downstream_train) is the 70% `pretrain`
+    # set; the held-out 30% test is EVERYTHING ELSE. The committed CSVs may label that 30%
+    # as `test` (current build) or as `downstream_train` + `test` (older 70/15/15 CSVs); both
+    # map to the same held-out 30% the published model is evaluated on.
+    is_train = df_all['split'] == 'pretrain'
+    train_df = df_all[is_train].drop(columns=['split']).reset_index(drop=True)
+    test_df  = df_all[~is_train].drop(columns=['split']).reset_index(drop=True)
+    if len(train_df) == 0 or len(test_df) == 0:
+        sys.exit(f"unexpected split values {sorted(df_all['split'].unique())} — expected a 'pretrain' split.")
+    train_df.to_parquet(pq_out / 'pretrain.parquet')
+    train_df.to_parquet(pq_out / 'downstream_train.parquet')   # == pretrain (full supervision)
+    test_df.to_parquet(pq_out / 'test.parquet')
+
+    rng = random.Random(seed)
+    for eta in (1, 3, 5, 7, 10):
+        per = defaultdict(list)
+        for j, row in train_df.iterrows():
+            per[row['category_label']].append(j)
+        chosen = [k for _, ix in per.items() for k in rng.sample(ix, min(eta, len(ix)))]
+        train_df.iloc[chosen].reset_index(drop=True).to_parquet(pq_out / f'fewshot_eta{eta}.parquet')
+
+    json.dump({'traffic_types': TRAFFIC_TYPES, 'type2id': TYPE2ID},
+              open(pq_out / 'labels.json', 'w'), indent=2)
+    _log.info('from-csvs: %d flows -> train/downstream %d, test %d (skipped %d <5pkt); wrote parquet + %s',
+              len(df_all), len(train_df), len(test_df), n_skipped, pq_out / 'labels.json')
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument('--raw_dir', required=True)
+    ap.add_argument('--raw_dir', default=None,
+                    help='raw 5G/VLC/CG capture dir (required unless --from-csvs)')
+    ap.add_argument('--from-csvs', action='store_true',
+                    help='skip raw parsing: rebuild the parquet tensors + labels.json directly '
+                         'from the committed feature CSVs in --csv_out (no Kaggle download). '
+                         'Uses the CSVs\' recorded split column, so the train/test partition '
+                         'matches the published model exactly.')
     ap.add_argument('--csv_out', default='data/traffic_csvs')
     ap.add_argument('--parquet_out', default='data/processed_traffic')
     ap.add_argument('--min_packets', type=int, default=5)
@@ -82,9 +165,18 @@ def main() -> None:
     ap.add_argument('--seed', type=int, default=42)
     args = ap.parse_args()
 
-    raw = Path(args.raw_dir)
-    csv_out = Path(args.csv_out); csv_out.mkdir(parents=True, exist_ok=True)
+    csv_out = Path(args.csv_out)
     pq_out = Path(args.parquet_out); pq_out.mkdir(parents=True, exist_ok=True)
+
+    # ── CSV-only path: rebuild parquet tensors from the committed feature CSVs ──
+    if args.from_csvs:
+        build_parquet_from_csvs(csv_out, pq_out, args.seed)
+        return
+
+    if not args.raw_dir:
+        sys.exit('--raw_dir is required (or pass --from-csvs to rebuild from data/traffic_csvs).')
+    raw = Path(args.raw_dir)
+    csv_out.mkdir(parents=True, exist_ok=True)
 
     # index every sub-dir by leaf name (any depth)
     dir_index = {p.name: p for p in raw.rglob('*') if p.is_dir()}

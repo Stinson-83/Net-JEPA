@@ -119,6 +119,11 @@ python -m netjepa.scripts.evaluate --config src/netjepa/configs/traffic.yaml \
     --checkpoint checkpoints/traffic8/phase3/final.pt --device cpu     # or: make reproduce
 ```
 
+To reproduce **without a Kaggle account** — rebuilding the parquet from the committed feature
+CSVs and pulling weights from Hugging Face — use **`make reproduce-local`** (details in
+[install.md](install.md)). This is the path that produced the numbers above: kNN **0.9967**,
+macro-F1 **0.9925**, silhouette **0.872**, on 20,224 train / 8,668 test.
+
 It prints the KPI summary and writes diagnostic plots (a confusion matrix and the
 intra/inter cosine-similarity distributions) to `eval_results/`. Per-flow latency is measured
 separately with `make latency` (see [install.md](install.md)).

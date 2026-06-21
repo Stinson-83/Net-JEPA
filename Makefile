@@ -10,6 +10,7 @@ DEVICE      ?= cpu
 CKPT        ?= checkpoints/traffic8/phase3/final.pt
 CFG         ?= src/netjepa/configs/traffic.yaml
 LABELS      ?= data/processed_traffic/labels.json
+PROCESSED_DIR ?= data/processed_traffic
 DATASET_ID  ?= traffic8
 FOLDIN_APPS ?= teams,netflix,prime,youtube,roblox,spotify,web,xbox
 PORT        ?= 8000
@@ -18,8 +19,8 @@ SCRIPTS := src/netjepa/scripts
 RUN     := $(PY) -m netjepa.scripts
 
 .DEFAULT_GOAL := help
-.PHONY: help install demo stop reproduce serve webui \
-        fetch fetch-weights fetch-data fetch-foldins evaluate infer latency train export clean clean-assets
+.PHONY: help install demo stop reproduce reproduce-local reproduce-full serve webui \
+        fetch fetch-weights fetch-data fetch-foldins build-csvs evaluate infer latency train export clean clean-assets
 
 help: ## Show this help
 	@awk 'BEGIN{FS=":.*## "} \
@@ -37,7 +38,9 @@ demo: install ## Run the live demo: inference server (weights auto-download from
 stop: ## Stop the inference server started by 'make demo'
 	@kill `cat .netjepa-server.pid 2>/dev/null` 2>/dev/null && echo "server stopped" || echo "(no server running)"; rm -f .netjepa-server.pid
 
-reproduce: install fetch evaluate ## Reproduce the KPIs: install -> fetch weights+data -> evaluate
+reproduce: install fetch evaluate ## Reproduce the KPIs: install -> fetch weights+data (Kaggle) -> evaluate
+reproduce-local: install fetch-weights build-csvs evaluate ## Reproduce the KPIs with NO Kaggle: HF weights + committed CSVs -> evaluate
+reproduce-full: install fetch-data train ## Reproduce FROM BASE: download datasets -> convert to CSVs + build -> train phase1->2b->3 -> evaluate (needs Kaggle creds; DEVICE=cuda)
 
 install: .make-installed ## Install Python + web dependencies (auto, cached)
 .make-installed: requirements.txt setup.py webui/package.json
@@ -54,6 +57,8 @@ fetch-data: install ## Data ONLY, from Kaggle + fold-ins -> build 8-class datase
 fetch: install ## BOTH weights (HF) + data (Kaggle + fold-ins -> build 8-class dataset)
 	$(PY) $(SCRIPTS)/fetch_assets.py --with-foldins --foldin-apps $(FOLDIN_APPS)
 fetch-foldins: fetch-data ## Alias of fetch-data (the 8-class build always needs the fold-ins)
+build-csvs: install ## Rebuild the parquet tensors from the committed data/traffic_csvs/ (NO Kaggle)
+	$(RUN).build_traffic_dataset --from-csvs --csv_out data/traffic_csvs --parquet_out $(PROCESSED_DIR)
 
 ##@ Run the pipeline (terminal)
 evaluate: install ## Evaluate the checkpoint and print the KPI summary (vars: CKPT, CFG, DEVICE)
