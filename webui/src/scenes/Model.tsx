@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Panel, cx } from '../ui/primitives';
 import { IconCpu, IconShield, IconZap, IconSparkle } from '../ui/icons';
+import ProofLab from '../panels/ProofLab';
 
 type Mode = 'eli5' | 'math';
 
@@ -153,6 +154,11 @@ export default function Model() {
               })}
             </div>
           </Panel>
+        </div>
+
+        {/* Proof Lab — verify the problem-statement KPIs on uploaded captures */}
+        <div className="mt-3">
+          <ProofLab />
         </div>
       </div>
     </div>

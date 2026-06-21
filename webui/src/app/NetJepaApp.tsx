@@ -6,9 +6,8 @@ import TopBar from '../panels/TopBar';
 import Atlas from '../scenes/Atlas';
 import Model from '../scenes/Model';
 import Proof from '../scenes/Proof';
-import Journey from '../scenes/Journey';
 
-const SCENE_KEYS: Record<string, Scene> = { '1': 'atlas', '2': 'model', '3': 'proof', '4': 'journey' };
+const SCENE_KEYS: Record<string, Scene> = { '1': 'atlas', '2': 'model', '3': 'proof' };
 
 export default function NetJepaApp() {
   const bootstrap = useStore((s) => s.bootstrap);
@@ -24,7 +23,7 @@ export default function NetJepaApp() {
     const q = new URLSearchParams(window.location.search);
     const sc = q.get('scene') as Scene | null;
     if (q.has('skipintro') || sc) useStore.getState().finishIntro();
-    if (sc && ['atlas', 'model', 'proof', 'journey'].includes(sc)) useStore.getState().setScene(sc);
+    if (sc && ['atlas', 'model', 'proof'].includes(sc)) useStore.getState().setScene(sc);
   }, []);
 
   useEffect(() => {
@@ -48,7 +47,6 @@ export default function NetJepaApp() {
           {scene === 'atlas' && <Atlas />}
           {scene === 'model' && <Model />}
           {scene === 'proof' && <Proof />}
-          {scene === 'journey' && <Journey />}
         </div>
         {dataLoading && (
           <div className="absolute inset-0 z-40 grid place-items-center">

@@ -15,7 +15,7 @@ import { startLiveStream } from '../data/ws';
 export const EMPTY_POINTS: UmapPoint[] = [];
 export const EMPTY_CLASSES: string[] = [];
 
-export type Scene = 'atlas' | 'model' | 'proof' | 'journey';
+export type Scene = 'atlas' | 'model' | 'proof';
 
 /** Pipeline stages — faithful to the real model (no fictional blocks). */
 export interface PipelineStage { id: string; label: string; sub: string; }

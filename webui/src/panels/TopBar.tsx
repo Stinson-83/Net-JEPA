@@ -1,13 +1,12 @@
 import { useStore } from '../app/store';
 import type { Scene } from '../app/store';
 import { cx } from '../ui/primitives';
-import { IconLayers, IconCpu, IconTarget, IconBook } from '../ui/icons';
+import { IconLayers, IconCpu, IconTarget } from '../ui/icons';
 
 const SCENES: { id: Scene; label: string; icon: React.FC<{ size?: number }> }[] = [
   { id: 'atlas', label: 'Atlas', icon: IconLayers },
   { id: 'model', label: 'Model', icon: IconCpu },
   { id: 'proof', label: 'Proof', icon: IconTarget },
-  { id: 'journey', label: 'Journey', icon: IconBook },
 ];
 
 function Kpi({ label, value, ok }: { label: string; value: string; ok: boolean }) {
