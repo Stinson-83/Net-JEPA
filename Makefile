@@ -19,7 +19,7 @@ RUN     := $(PY) -m netjepa.scripts
 
 .DEFAULT_GOAL := help
 .PHONY: help install demo stop reproduce serve webui \
-        fetch fetch-weights fetch-data fetch-foldins evaluate infer train export clean clean-assets
+        fetch fetch-weights fetch-data fetch-foldins evaluate infer latency train export clean clean-assets
 
 help: ## Show this help
 	@awk 'BEGIN{FS=":.*## "} \
@@ -61,6 +61,8 @@ evaluate: install ## Evaluate the checkpoint and print the KPI summary (vars: CK
 infer: install ## Classify a pcap in the terminal (no UI/server): make infer PCAP=path/to/file.pcap
 	@test -n "$(PCAP)" || { echo "usage: make infer PCAP=path/to/file.pcap"; exit 1; }
 	$(RUN).infer_pcap "$(PCAP)" --checkpoint $(CKPT) --labels $(LABELS) --device $(DEVICE)
+latency: install ## Per-flow latency over all CSV flows (embedding -> classification); vars: CKPT, DEVICE
+	$(RUN).latency_per_flow --checkpoint $(CKPT) --device $(DEVICE)
 train: install ## Train the 8-class model from scratch: phase1 -> phase2b -> phase3 -> evaluate (run 'make fetch-data' first; DEVICE=cuda)
 	$(RUN).train_phase1  --config $(CFG) --ckpt_dir checkpoints/traffic8/phase1 --device $(DEVICE)
 	$(RUN).train_phase2b --config $(CFG) --init_ckpt checkpoints/traffic8/phase1/final.pt --ckpt_dir checkpoints/traffic8/phase2b --device $(DEVICE)
