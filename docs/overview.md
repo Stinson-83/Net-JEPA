@@ -3,15 +3,15 @@
 ## The problem
 
 Modern network traffic is almost entirely **encrypted** (TLS, QUIC). Operators can no
-longer read payloads, yet they still need to know *what kind* of application a flow is —
+longer read payloads, yet they still need to know what kind of application a flow is —
 to prioritise a video call over a background download, to provision 5G slices, to detect
-anomalies. Deep Packet Inspection is dead; the question is whether the **metadata that
-encryption can't hide** — packet sizes, inter-arrival times, direction — carries enough
-signal to classify traffic.
+anomalies. Deep Packet Inspection is no longer viable; the question is whether the
+**metadata that encryption cannot hide** — packet sizes, inter-arrival times, direction —
+carries enough signal to classify traffic.
 
-**It does.** Encryption hides *what* you send. It cannot hide *how* you send it. A Zoom
-call, a Netflix stream, and a cloud-gaming session each have a distinct *rhythm* of
-packets. Net-JEPA learns to read that rhythm.
+Encryption conceals the content of a flow but not its temporal structure. A Zoom call, a
+Netflix stream, and a cloud-gaming session each exhibit a distinct pattern of packet
+sizes and timing. Net-JEPA learns to classify traffic from that structure.
 
 ## Problem statement (Samsung EnnovateX 2026, #2)
 
@@ -19,32 +19,34 @@ packets. Net-JEPA learns to read that rhythm.
 > Build a model that produces flow embeddings for encrypted traffic and meets fixed KPIs
 > on cosine separation, accuracy, generalization, and real-time latency.
 
-## Our solution in one paragraph
+## Solution summary
 
 Net-JEPA is a **Joint-Embedding Predictive Architecture (JEPA)** for network flows. From a
 flow's first 64 packets it builds a `(64×9)` feature matrix (size, log-IAT, signed
 direction, protocol one-hot, RTT) plus a 15-D flow-context vector. A Transformer encoder
 learns **self-supervised** by predicting masked parts of a flow against a slow-moving EMA
 "target" copy of itself (VICReg loss — no labels, no negatives). A supervised
-**contrastive** fine-tune (SupCon) on the 8 traffic types, plus a **common-mode
-removal** (α-centering) trick, shapes a 128-D unit-sphere embedding where same-class flows
-point together and different-class flows are nearly orthogonal. A cosine **k-NN** then
+**contrastive** fine-tune (SupCon) on the 8 traffic types, together with a **common-mode
+removal** procedure (α-centering), shapes a 128-D unit-sphere embedding in which same-class
+flows align and different-class flows are nearly orthogonal. A cosine **k-NN** then
 classifies in ~3.5 ms on CPU.
 
 ## The eight traffic types
 
 | Traffic type | Apps / sources | Packet signature |
 |---|---|---|
-| 🎵 Audio Streaming | Spotify | Thin steady downstream, low rate |
-| ☁️ Cloud Gaming | GeForce NOW, KT GameBox, Xbox Cloud | Fat steady downstream, trickle of control up |
-| 📡 Live Streaming | YouTube Live, AfreecaTV, Naver NOW | Sustained downstream in tight bursts |
-| 🧊 Metaverse / XR | Roblox, Zepeto | Chatty bidirectional small-packet storms |
-| 🎮 Online Gaming | PUBG/Battleground, Teamfight Tactics | Rapid tiny UDP datagrams, latency-first |
-| 🎥 Video Conferencing | Zoom, Teams, Meet | Symmetric real-time; jitter-sensitive |
-| 🎬 Video on Demand | Netflix, Prime, YouTube | Big chunked bursts then long silences |
-| 🌐 Web Browsing | general web | Bursty request/response to many hosts |
+| Audio Streaming | Spotify | Thin steady downstream, low rate |
+|Cloud Gaming | GeForce NOW, KT GameBox, Xbox Cloud | Fat steady downstream, trickle of control up |
+| Live Streaming | YouTube Live, AfreecaTV, Naver NOW | Sustained downstream in tight bursts |
+| Metaverse / XR | Roblox, Zepeto | Chatty bidirectional small-packet storms |
+| Online Gaming | PUBG/Battleground, Teamfight Tactics | Rapid tiny UDP datagrams, latency-first |
+| Video Conferencing | Zoom, Teams, Meet | Symmetric real-time; jitter-sensitive |
+| Video on Demand | Netflix, Prime, YouTube | Big chunked bursts then long silences |
+| Web Browsing | general web | Bursty request/response to many hosts |
 
-## KPIs — all met
+## KPIs
+
+All benchmark KPIs are met.
 
 | Benchmark KPI | Target | Achieved | How |
 |---|---|---|---|
@@ -54,19 +56,19 @@ classifies in ~3.5 ms on CPU.
 | Generalization | ≥ 85% | **99.6%** | Few-shot (η=7, held-out flows) |
 | Real-time | < 100 ms | **3.5 ms** (CPU) | Lightweight encoder, no GPU needed to serve |
 
-Plus **macro-F1 0.992** and silhouette **0.87**. See [results.md](results.md) for per-class
-numbers, the per-capture-host-stats fix that drove them, and real-`.pcap` inference results.
+Additionally, **macro-F1 0.992** and silhouette **0.87**. See [results.md](results.md) for
+per-class numbers, the per-capture-host-stats fix that drove them, and real-`.pcap`
+inference results.
 
-## What makes it stand out
+## Distinguishing characteristics
 
-- **No decryption, ever** — only packet metadata is used.
-- **Self-supervised first** — learns from ~20k unlabelled flows before any labels.
-- **Hits every KPI**, including the hard cosine targets that naïve approaches miss.
-- **Upload-any-`.pcap` actually works** — the same flow/feature pipeline runs at training and
-  inference (incl. per-capture host stats), so a raw browser YouTube capture correctly reads
-  `video_on_demand`. See [results.md §5.5](results.md).
-- **Honest evaluation** — we report the one weak spot (single-flow snippets) rather than
-  hiding it.
-- **Runs in real time on CPU** — ~3.5 ms/flow, deployable at the edge.
-- **A demo judges can *play* with** — a live "atlas" of real flows; drop in a `.pcap` and
-  watch the model classify it. See [features.md](features.md).
+- **No decryption** — only packet metadata is used.
+- **Self-supervised pretraining** — learns from ~20k unlabelled flows before any labels are introduced.
+- **Meets every KPI**, including the cosine targets that simpler approaches do not reach.
+- **Raw `.pcap` inference** — the same flow/feature pipeline runs at training and
+  inference (including per-capture host stats), so a raw browser YouTube capture is correctly
+  classified as `video_on_demand`. See [results.md §5.5](results.md).
+- **Transparent evaluation** — the one known weak spot (single-flow snippets) is reported rather than omitted.
+- **Real-time on CPU** — ~3.5 ms/flow, deployable at the edge.
+- **Interactive demonstration** — a live atlas of real flows; uploading a `.pcap` runs the model
+  and classifies it. See [features.md](features.md).

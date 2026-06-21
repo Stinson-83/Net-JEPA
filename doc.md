@@ -24,7 +24,7 @@ and uses them to classify traffic into 8 traffic types.
 
 > This is the deep engineering reference. For the structured docs set (overview, datasets,
 > tech-stack, results, features, agentic-AI write-up, presentation), see [`docs/`](docs/README.md).
-> For the honest chronological research log, see [`experimentation.md`](experimentation.md).
+> For the chronological research log, see [`experimentation_log.md`](experimentation_log.md).
 
 ---
 
@@ -85,9 +85,9 @@ leaking into the labelled set), out-of-domain apps are folded in via
 
 | Source | Apps used | Role |
 |---|---|---|
-| **VLC / Valencia** ([Zenodo 15121418](https://zenodo.org/records/15121418), CC-BY-4.0) | MS Teams → `ms_teams`/video_conferencing | **supervised** (rescued the starved video-conf class, F1 0.67→0.93) |
+| **VLC / Valencia** ([Zenodo 15121418](https://zenodo.org/records/15121418), CC-BY-4.0) | MS Teams → `ms_teams`/video_conferencing | **supervised** (recovered the under-represented video-conf class, F1 0.67→0.93) |
 | | Netflix / Prime / YouTube / Roblox (`VLC_*`) | **supervised** (representation diversity) |
-| **Cloud-gaming telemetry** ([Kaggle `carloshfm/...`](https://www.kaggle.com/datasets/carloshfm/cloud-gaming-network-telemetry), BSD-3) | Xbox Cloud over 5G → `CG_Xbox`/cloud_gaming | **supervised** + galaxy density (398→739 points) |
+| **Cloud-gaming telemetry** ([Kaggle `carloshfm/...`](https://www.kaggle.com/datasets/carloshfm/cloud-gaming-network-telemetry), BSD-3) | Xbox Cloud over 5G → `CG_Xbox`/cloud_gaming | **supervised** + point-cloud density (398→739 points) |
 
 Huge cloud-gaming pcaps (~1 GB / millions of packets) are capped at parse time
 with `--max_packets 600000`; only the ~5 GB of 5G captures were stream-extracted
@@ -271,7 +271,7 @@ PHASE 2 — Embedding Refinement  (50 epochs, OPTIONAL)
   Same DBSCAN contrastive, refreshed every 5 epochs
   Superseded by Phase 2b in the recommended path.
 
-PHASE 2b — Supervised Contrastive Fine-tuning  (≈120 epochs)  ★ recommended
+PHASE 2b — Supervised Contrastive Fine-tuning  (≈120 epochs)  (recommended)
   Loads Phase 1 checkpoint (init_ckpt, strict=False — embed_head is new).
   SupCon on CATEGORY labels (the KPI's class level: Youtube+Netflix = intra),
   applied directly on the KEPT, L2-normalised embed_head output (the embedding
@@ -313,16 +313,16 @@ PHASE 3 — Downstream Classification  (50 epochs)
 
 | Benchmark KPI | Target | Result |
 |---|---|---|
-| Intra-class cosine | > 0.7 | **0.98** ✅ |
-| Inter-class cosine | < 0.3 | **−0.04** ✅ |
-| Classification accuracy | ≥ 90% | **0.997** (kNN) ✅ |
-| Generalization (few-shot η≥3) | ≥ 85% | **0.996** ✅ |
-| Real-time per flow | < 100 ms | **3.5 ms** ✅ |
+| Intra-class cosine | > 0.7 | **0.98** |
+| Inter-class cosine | < 0.3 | **−0.04** |
+| Classification accuracy | ≥ 90% | **0.997** (kNN) |
+| Generalization (few-shot η≥3) | ≥ 85% | **0.996** |
+| Real-time per flow | < 100 ms | **3.5 ms** |
 
-macro-F1 **0.992**, silhouette **0.87**. Reaching the cosine targets needed two
-things together: (1) **category-level SupCon** — the KPI defines class at the
+macro-F1 **0.992**, silhouette **0.87**. Reaching the cosine targets required two
+methods together: (1) **category-level SupCon** — the KPI defines class at the
 category level ("Youtube and Netflix" = intra), so app-level contrast would
-fight it; and (2) **common-mode removal** — SupCon separates class *directions*
+oppose it; and (2) **common-mode removal** — SupCon separates class *directions*
 (silhouette ↑) but leaves them in a shared cone (inter-cosine pinned ~0.7);
 subtracting α·mean (α≈0.65, `embed_head` + `set_centering`) isotropises the space
 so absolute inter-cosine drops below 0.3 while intra stays above 0.7.
@@ -341,10 +341,10 @@ held-out "foreign testbed" — generalization is measured two ways:
   netflix_linux_20m_01.pcapng   → video_on_demand  99%
   spotify_windows_30m_02.pcapng → audio_streaming   97%
   xbox_fortnite_*.pcap          → cloud_gaming      89%
-  youtube_video.pcap (browser QUIC, never in training) → video_on_demand ✅
+  youtube_video.pcap (browser QUIC, never in training) → video_on_demand
 ```
 
-The last row is the real generalization proof: a Chrome-native QUIC capture — a
+The last row is the strongest evidence of generalization: a Chrome-native QUIC capture — a
 different capture domain from the VLC/Kaggle testbeds — still resolves correctly.
 
 **What made this work: per-capture host stats.** Host-behaviour features
@@ -356,9 +356,9 @@ which made real pcaps collapse to the wrong class. Switching to per-capture took
 the model **0.86 → 0.997** *and* fixed `.pcap` upload — both from one change
 (verified genuine: same-capture-excluded kNN = 0.9967).
 
-**Known limitation (reported honestly):** a pcap with only a *single* flow yields
+**Known limitation:** a pcap with only a single flow yields
 degenerate host stats (`n_dst_ips=1`) unlike any multi-flow training capture and
-can misclassify. Real multi-flow captures work.
+can misclassify. Real multi-flow captures classify correctly.
 
 ### Optional — domain adaptation (DANN), `src/netjepa/training/phase2c.py`
 
@@ -416,7 +416,7 @@ future work on networks outside the trained sources.
 ```
 
 The front-end reads a **static export** when the server is down and the **live
-server** when it's up. Full feature tour: `docs/features.md`. (A minimal legacy
+server** when it is up. Full feature description: `docs/features.md`. (A minimal legacy
 dashboard under `src/server/static/` is retained as a serverless fallback.)
 
 **Connecting the UI ↔ server (single port).** The webui calls the API at the
@@ -538,7 +538,7 @@ python3 src/netjepa/scripts/evaluate.py --processed_dir data/processed_gen \
 | flow_ctx never degraded | Global statistics are stable; only packet timing is noisy |
 | VICReg variance term | Prevents dimensional collapse (all embeddings becoming identical) |
 | DBSCAN pseudo-labels | Provides class structure signal before any labels are used; clustered on the full set, labels keyed by flow index, contrastive skipped if <2 clusters |
-| Balanced SupCon (Phase 2b) | Real-label supervised contrastive with class-balanced batches — the lever that actually lifted macro-F1 and rescued sparse classes |
+| Balanced SupCon (Phase 2b) | Real-label supervised contrastive with class-balanced batches — the change that lifted macro-F1 and recovered sparse classes |
 | Category-level SupCon + α-centering | Cosine KPI is category-level (Youtube+Netflix=intra) → supervise on categories; SupCon separates directions but leaves a common-mode cone → subtract α·mean to get inter-cosine < 0.3 while keeping intra > 0.7 |
 | min_packets = 5 | Lowered from 10 to recover short flows (~33% more data, better class balance) without going below the ≥2 needed for IAT/RTT features |
 | Class-weighted CE, not balanced sampling, in Phase 3 heads | One imbalance correction, not two — combining oversampling + weighting collapses the heads onto minority predictions |

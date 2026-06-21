@@ -65,8 +65,8 @@ embedding to predict one of 8 traffic types.
 | Generalization (few-shot, η=7) | ≥ 85% | **99.6%** |
 | Real-time latency / flow | < 100 ms | **3.5 ms** (CPU) |
 
-macro-F1 **0.992** · silhouette **0.87**. Per-class F1 ranges 0.971 (cloud gaming, the rarest /
-hardest) to 1.000 (metaverse). Full numbers: see the repo's `docs/results.md`.
+macro-F1 **0.992** · silhouette **0.87**. Per-class F1 ranges from 0.971 (cloud gaming, the
+rarest and most difficult class) to 1.000 (metaverse). Full numbers: see the repo's `docs/results.md`.
 
 ## How to use
 
@@ -120,10 +120,10 @@ All datasets are **public**; the current model trains on **8 traffic types, all 
   **encrypted** flows where DPI is impossible. Operates on metadata only.
 - **Out of scope:** identifying individual users or payload content (it cannot — only flow shape
   is modelled).
-- **Known limitation (reported honestly):** classification relies on per-capture host-behaviour
+- **Known limitation:** classification relies on per-capture host-behaviour
   features, so a pcap containing only a **single flow** yields degenerate host stats and may
-  misclassify. Real captures contain many flows and work; multi-flow captures of the 8 trained
-  types — including out-of-domain browser QUIC — classify correctly. See `docs/results.md`.
+  misclassify. Real captures contain many flows and classify correctly; multi-flow captures of the
+  8 trained types — including out-of-domain browser QUIC — classify correctly. See `docs/results.md`.
 
 ## Citation
 

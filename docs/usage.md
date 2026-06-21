@@ -6,7 +6,7 @@
 - (Optional) an NVIDIA GPU for faster training — **not** required for inference/serving
 - `tshark` is **not** required (pcap conversion uses scapy)
 
-> **TL;DR (one command):** `make reproduce` → install → fetch weights+data → reproduce the KPIs.
+> **Quick start (one command):** `make reproduce` → install → fetch weights+data → reproduce the KPIs.
 > `make help` lists every shortcut; the explicit steps below are what each target runs.
 
 ## 6.2 Install
@@ -17,12 +17,12 @@ pip install -e .                  # register the src/ packages (netjepa, server,
 cd webui && npm install && cd ..  # front-end deps
 ```
 
-**You normally don't run these by hand** — every `make` target (e.g. `make demo`, `make reproduce`)
-installs automatically on first run and caches it. The commands above are just the manual equivalent
+These commands are not normally run by hand: every `make` target (e.g. `make demo`, `make reproduce`)
+installs automatically on first run and caches the result. The commands above are the manual equivalent
 of `make install`.
 
 All Python source lives under `src/` (see [architecture.md §2.6](architecture.md)). `pip install -e .`
-makes `netjepa`, `server`, etc. importable from any directory. You can skip it if you prefer — the
+makes `netjepa`, `server`, etc. importable from any directory. This step is optional: the
 training/eval scripts self-bootstrap their import path, and the server can be launched with
 `--app-dir src` (shown below).
 
@@ -173,14 +173,14 @@ URL into the top-level README ("Models Published") and [tech-stack.md §4.4](tec
 
 | Action | How |
 |---|---|
-| Fly through the galaxy | drag = orbit · scroll = zoom |
-| Inspect a flow | **click any star** → packet "heartbeat", model verdict, k-NN neighbours |
-| Solo a class | click it in the legend (left); hover for its packet signature |
-| Classify your own traffic | **Upload .pcap** in the bottom dock (real inference if server is up) |
-| Try without a pcap | click a **"simulate <class>"** chip — watch it walk the pipeline and land |
-| See the model | top-bar **Model** tab — interactive JEPA, "Explain simply ↔ Show the math" |
-| See the proof | **Proof** tab — KPIs, cosine separation, confusion matrix, per-class F1 |
-| See the story | **Journey** tab — the honest research timeline |
+| Navigate the embedding view | drag = orbit · scroll = zoom |
+| Inspect a flow | **click any point** → packet "heartbeat", model prediction, k-NN neighbours |
+| Isolate a class | click it in the legend (left); hover for its packet signature |
+| Classify your own traffic | **Upload .pcap** in the bottom dock (live inference if the server is running) |
+| Demonstrate without a pcap | click a **"simulate <class>"** chip to run a representative flow through the pipeline |
+| View the model | top-bar **Model** tab — interactive JEPA, "Explain simply ↔ Show the math" |
+| View the results | **Proof** tab — KPIs, cosine separation, confusion matrix, per-class F1 |
+| View the development history | **Journey** tab — the research timeline |
 
 ## 6.6 Environment variables (server)
 
@@ -258,7 +258,8 @@ python -m netjepa.scripts.evaluate --config $CFG --checkpoint checkpoints/traffi
 make demo             # install (first run) → start server (weights auto-download from HF) → open the UI
 #   Ctrl-C stops the UI; then `make stop` stops the server.
 ```
-That's the whole live experience: upload a `.pcap` in the UI and the **real model** classifies it —
-the server fetches the weights from Hugging Face automatically, and **no dataset is needed** (the
-galaxy runs off the committed embeddings). Prefer two terminals? `make serve` + `make webui`. The UI
-also works **fully offline** off the committed static export if no server is running.
+This launches the full live system: uploading a `.pcap` in the UI runs the trained model and
+classifies it. The server fetches the weights from Hugging Face automatically, and no dataset is
+required (the embedding view runs off the committed embeddings). For two terminals, use `make serve`
++ `make webui`. The UI also works **fully offline** off the committed static export if no server is
+running.

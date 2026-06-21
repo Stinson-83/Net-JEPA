@@ -16,8 +16,8 @@
   [datasets](docs/datasets.md) · [tech-stack & OSS libraries](docs/tech-stack.md) ·
   [installation & usage](docs/usage.md) · [salient features](docs/features.md) ·
   [results & KPIs](docs/results.md) · [presentation outline](docs/presentation.md).
-  A deeper engineering reference with ASCII diagrams is in [`doc.md`](doc.md), and an honest
-  chronological research log (bugs, dead-ends, fixes) is in [`experimentation.md`](experimentation.md).
+  A deeper engineering reference with ASCII diagrams is in [`doc.md`](doc.md), and a
+  chronological research log (bugs, dead-ends, fixes) is in [`experimentation_log.md`](experimentation_log.md).
 - **[Important]** Agentic-AI write-up: [**`docs/ax.md`**](docs/ax.md) — how we built this
   human-steered with Claude Code (Opus 4.8), including **what worked and what did not**.
 - **Source Code** - All Python source is under [**`src/`**](src/): `src/netjepa/` (core ML
@@ -27,10 +27,10 @@
   Atlas" React/WebGL app, with its own `webui/src/`). The package is installable with
   `pip install -e .`; the training/eval scripts also self-bootstrap, so they run directly with
   `python src/netjepa/scripts/<script>.py`. Install/run steps: [docs/usage.md](docs/usage.md).
-  **Quickstart (just clone + run):** `make demo` launches the live app — the Signal Atlas UI plus
-  real-model `.pcap` classification, with the weights **auto-downloaded from Hugging Face** and no
-  dataset required (the galaxy runs off committed embeddings). `make reproduce` reproduces the KPIs;
-  `make help` lists every target. Installation happens automatically on first run.
+  **Quickstart (clone + run):** `make demo` launches the live application — the Signal Atlas UI plus
+  trained-model `.pcap` classification, with the weights **auto-downloaded from Hugging Face** and no
+  dataset required (the embedding view runs off committed embeddings). `make reproduce` reproduces the
+  KPIs; `make help` lists every target. Installation happens automatically on first run.
 - **Models Used** - **None** (no pre-trained / foundation / closed-weight models). Net-JEPA is
   trained **from scratch** on the datasets below. See [docs/tech-stack.md §4.4](docs/tech-stack.md).
 - **Models Published** - **Hugging Face:

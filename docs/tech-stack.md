@@ -56,8 +56,8 @@ JetBrains Mono (Google Fonts).
   --repo-id <user>/net-jepa`; add `--with-umap` to also ship the 2-D atlas reducer). Checkpoints are
   gitignored due to size and remain reproducible end-to-end from the scripts.
 
-## 4.5 Why this stack
+## 4.5 Rationale for this stack
 
-- **CPU-first, edge-deployable** — PyTorch model is tiny; serving needs no GPU (~3.5 ms/flow).
-- **No vendor lock-in** — every component is permissively licensed OSS.
-- **Reproducible** — one `requirements.txt`, one `npm install`, deterministic seeds.
+- **CPU-first, edge-deployable** — the PyTorch model is small; serving requires no GPU (~3.5 ms/flow).
+- **No vendor lock-in** — every component is permissively licensed open-source software.
+- **Reproducible** — a single `requirements.txt`, a single `npm install`, and deterministic seeds.

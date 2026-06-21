@@ -1,6 +1,6 @@
 # 2 · Architecture
 
-A high-level tour. For ASCII block diagrams and every module, see [`../doc.md`](../doc.md).
+A high-level overview. For ASCII block diagrams and every module, see [`../doc.md`](../doc.md).
 
 ---
 
@@ -30,8 +30,8 @@ uploaded `.pcap`s. `min_packets`, `max_packets`, `flow_timeout` are config-drive
 
 ![Self-supervised JEPA core — dual-branch with VICReg loss](assets/arch_B_jepa_core.png)
 
-Net-JEPA never reconstructs raw bytes. It predicts *latent representations* of hidden
-flow segments — the JEPA idea — which is what lets it learn structure without labels.
+Net-JEPA does not reconstruct raw bytes. It predicts *latent representations* of hidden
+flow segments — the JEPA approach — which is what allows it to learn structure without labels.
 
 - **Online branch** (sees a *degraded* copy of the flow): Temporal Transformer encoder
   (4 layers, d=128) → cross-attention fusion with the flow-context vector → adaptive
@@ -45,11 +45,11 @@ flow segments — the JEPA idea — which is what lets it learn structure withou
 
 ---
 
-## 2.3 The Embedding — Where the KPIs Are Won
+## 2.3 The Embedding — Where the KPIs Are Determined
 
 ![Downstream embedding and classification head](assets/arch_C_downstream.png)
 
-The downstream embedding is the part the cosine KPI measures, so it gets special care:
+The downstream embedding is the component the cosine KPI measures, so it receives particular care:
 
 1. **Attention pooling** collapses the 64 packet latents into one flow vector, concatenated
    with the raw 15-D context → 143-D.
@@ -117,5 +117,5 @@ webui/              "Signal Atlas" React/WebGL front-end (its own webui/src/)
 pyproject.toml / setup.py   packaging for the src/ layout
 docs/               this documentation
 doc.md              deep engineering reference
-experimentation.md  honest chronological research log
+experimentation_log.md  honest chronological research log
 ```

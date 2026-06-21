@@ -1,7 +1,7 @@
 # 3 · Datasets
 
-All datasets used are **public**. No data was fabricated; the unevenness in the cloud
-reflects real-world capture sizes.
+All datasets used are **public**. No data was synthesised; the class imbalance in the
+point cloud reflects real-world capture sizes.
 
 ## 3.1 What the model is trained on — 8 common traffic types
 
