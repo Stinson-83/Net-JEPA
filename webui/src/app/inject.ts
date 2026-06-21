@@ -80,45 +80,44 @@ export async function injectFile(file: File): Promise<void> {
   const useServer = await serverHealthy(true);
   if (useServer) st.clearLiveEvents();
 
+  // Resolve the projection independently of the pipeline animation: real inference
+  // if the server is reachable, otherwise the client-side heuristic projector. This
+  // guarantees the flow lands (the previous animation-gated path could finish without
+  // landing when the server result arrived off-cadence).
   let settled = false;
-  const serverInfer: Promise<ProjectionResult | null> = useServer
-    ? inferPcapOnServer(file)
-      .then(async (res) => {
-        if (!res || res.added.length === 0) return null;
-        await useStore.getState().refreshBundle();
-        const s = res.summary;
-        const pt: UmapPoint = res.added[0];
-        // Headline = the packet-weighted DOMINANT type over all flows (matches the
-        // terminal), not just the first flow. Land it in that constellation, and
-        // attach the full per-class breakdown so a mixed capture shows every type.
-        const dominant = s?.dominant ?? pt.label;
-        const c = classCentroid(dominant);
-        const conf = s ? (s.packet_pct[dominant] ?? 0) / 100 : pt.confidence;
-        const breakdown = s
-          ? { nFlows: s.n_flows, flowCounts: s.flow_counts, packetPct: s.packet_pct, dominant }
-          : undefined;
-        return { x: c?.x ?? pt.x, y: c?.y ?? pt.y, label: dominant, confidence: conf, breakdown };
-      })
-      .catch(() => null)
-      .finally(() => { settled = true; })
-    : Promise.resolve(null);
-
-  let fired = false;
-  const fire = () => {
-    if (fired) return;
-    fired = true;
-    void serverInfer.then((real) => {
-      if (real) { land(sessionId, real); return; }
+  const resultP: Promise<ProjectionResult | null> = (async () => {
+    if (useServer) {
+      try {
+        const res = await inferPcapOnServer(file);
+        if (res && res.added.length > 0) {
+          await useStore.getState().refreshBundle();
+          const s = res.summary;
+          const pt: UmapPoint = res.added[0];
+          // Headline = packet-weighted DOMINANT type over all flows (matches the
+          // terminal); landed in that constellation, with the full per-class breakdown.
+          const dominant = s?.dominant ?? pt.label;
+          const c = classCentroid(dominant);
+          const conf = s ? (s.packet_pct[dominant] ?? 0) / 100 : pt.confidence;
+          const breakdown = s
+            ? { nFlows: s.n_flows, flowCounts: s.flow_counts, packetPct: s.packet_pct, dominant }
+            : undefined;
+          return { x: c?.x ?? pt.x, y: c?.y ?? pt.y, label: dominant, confidence: conf, breakdown };
+        }
+      } catch { /* fall through to client-side projection */ }
+    }
+    if (repFlow) {
       const { bundle, manifest } = useStore.getState();
-      const ctx = { points: bundle?.points ?? [], classes: manifest?.classes ?? [] };
-      if (repFlow) void projectToUMAP(repFlow, ctx).then((p) => land(sessionId, p));
-    });
-  };
+      return projectToUMAP(repFlow, { points: bundle?.points ?? [], classes: manifest?.classes ?? [] });
+    }
+    return null;
+  })();
+  void resultP.finally(() => { settled = true; });
 
-  const onStage = (i: number) => { if (i === PROJECT_IDX) fire(); };
-  if (useServer) await streamWalk(() => settled, onStage);
-  else await fixedWalk(onStage);
-  fire();
+  // Play the pipeline animation for show, then land whatever it produced.
+  if (useServer) await streamWalk(() => settled, () => {});
+  else await fixedWalk(() => {});
+  const result = await resultP;
+  if (result) land(sessionId, result);
 }
 
 /** Compute the centroid (+confidence proxy) of a category in the current cloud. */

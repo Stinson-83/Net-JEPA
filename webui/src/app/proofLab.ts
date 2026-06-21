@@ -1,20 +1,21 @@
 // ───────────────────────────────────────────────────────────────────────────
-// proofLab.ts — orchestrates the 3 KPI "proof" runs that map directly onto the
-// problem-statement targets, using the bundled REAL demo captures in
-// webui/public/demo/ and the live server.
-//
-//   ① Intra : Netflix vs YouTube  → both video_on_demand, cosine > 0.7
-//   ② Inter : Streaming vs Gaming → different classes,    cosine < 0.3
-//   ③ Degraded: a flow + a degraded copy → same class (robust to RTT/jitter/loss)
+// proofLab.ts — helpers for the three KPI "proof" runs (manual .pcap upload):
+//   • Compare two captures  → intra cosine > 0.7 (same type) / inter < 0.3 (different)
+//   • Degraded flow         → upload ONE capture; the server degrades it and re-classifies
+// All runs use the live model via /api/infer.
 // ───────────────────────────────────────────────────────────────────────────
 
 import { inferPcapOnServer, type InferSummary } from '../data/server';
 import { useStore } from './store';
 
-export async function fetchDemoPcap(name: string): Promise<File> {
-  const res = await fetch(`${import.meta.env.BASE_URL}demo/demo_${name}.pcap`);
-  const buf = await res.arrayBuffer();
-  return new File([buf], `demo_${name}.pcap`, { type: 'application/octet-stream' });
+/** Classify one uploaded file via the live server; optionally degrade first.
+ *  Returns the per-capture summary (dominant type, breakdown, rep_embedding) or
+ *  null if the server is unreachable. */
+export async function inferFile(
+  file: File, degrade?: Record<string, number>): Promise<InferSummary | null> {
+  const r = await inferPcapOnServer(file, degrade);
+  await useStore.getState().refreshBundle();   // show the newly-landed points in the galaxy
+  return r?.summary ?? null;
 }
 
 /** Cosine similarity of two L2-normalised embeddings (rep_embedding from the server). */
@@ -26,14 +27,9 @@ export function cosine(a?: number[] | null, b?: number[] | null): number | null 
   return d > 0 ? dot / d : null;
 }
 
-export async function inferDemo(
-  name: string, degrade?: Record<string, number>): Promise<InferSummary | null> {
-  const file = await fetchDemoPcap(name);
-  const r = await inferPcapOnServer(file, degrade);
-  await useStore.getState().refreshBundle();   // pull the newly-landed points into the galaxy
-  return r?.summary ?? null;
+/** Convenience: load a bundled sample capture (webui/public/demo) into a slot. */
+export async function fetchDemoPcap(name: string): Promise<File> {
+  const res = await fetch(`${import.meta.env.BASE_URL}demo/demo_${name}.pcap`);
+  const buf = await res.arrayBuffer();
+  return new File([buf], `demo_${name}.pcap`, { type: 'application/octet-stream' });
 }
-
-export const DEMO_LABELS: Record<string, string> = {
-  netflix: 'Netflix', youtube: 'YouTube', gaming: 'Cloud Gaming',
-};
