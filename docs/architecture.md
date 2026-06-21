@@ -1,10 +1,12 @@
-# 2 · Architecture
+# Architecture
 
-A high-level overview. For ASCII block diagrams and every module, see [`../doc.md`](../doc.md).
+A high-level tour of the solution, with diagrams. For exact tensor shapes, module
+responsibilities, hyper-parameters, loss math, and the repository layout, see
+[implementation.md](implementation.md). For how to run any of this, see [install.md](install.md).
 
 ---
 
-## 2.1 Data → Features
+## Data → Features
 
 ![Data pipeline — from raw captures to tensors](assets/arch_A_data_features.png)
 
@@ -14,19 +16,19 @@ model sees any data:
 1. **Parse** — extract ports, TCP flags (SYN/ACK/FIN/RST), and TLS Client/Server Hello markers.
 2. **Bidirectional flow grouping** — canonical 5-tuple key; 30 s idle split; flows kept at ≥ 5 and ≤ 64 packets. The client/device is the SYN initiator, else the **private/local endpoint**, else the first packet's source (so direction is correct on real mid-stream captures).
 3. **RTT extraction** — TCP handshake → TLS handshake → first-exchange fallback.
-4. **Per-capture host stats** — `n_dst_ips / n_dst_ports / n_src_ports / conn_per_sec` are computed **per capture** (per `source_file` at train time, per uploaded pcap at inference). This keeps the host-behaviour features both discriminative and identical between training and serving — the fix that took accuracy 0.86 → 0.997 (see [results.md §5.3](results.md)).
+4. **Per-capture host stats** — `n_dst_ips / n_dst_ports / n_src_ports / conn_per_sec` are computed **per capture** (per `source_file` at train time, per uploaded pcap at inference). This keeps the host-behaviour features both discriminative and identical between training and serving — the fix that took accuracy 0.86 → 0.997 (see [results.md](results.md)).
 5. **Feature tensors**
    - `packet_sequence` **(64 × 9)**: `[size/1500, log1p(IAT), signed direction, proto one-hot×4, rtt_norm, rtt_flag]`
    - `flow_context` **(15,)**: proto, durations, IAT stats, SYN/FIN/RST ratios, pkts/s, per-capture host stats, packet count, RTT
    - `padding_mask` **(64,)**: real packet vs. zero-padding
 
 The exact same parse→flow→features code runs on Kaggle CSVs, converted VLC/CG captures, and
-uploaded `.pcap`s. `min_packets`, `max_packets`, `flow_timeout` are config-driven
-(`src/netjepa/configs/default.yaml`; the 8-class build uses `traffic.yaml`).
+uploaded `.pcap`s. Where the data comes from and how the dataset is assembled is in
+[datasets.md](datasets.md); the module-by-module internals are in [implementation.md](implementation.md).
 
 ---
 
-## 2.2 The Model — a JEPA
+## The Model — a JEPA
 
 ![Self-supervised JEPA core — dual-branch with VICReg loss](assets/arch_B_jepa_core.png)
 
@@ -45,7 +47,7 @@ flow segments — the JEPA approach — which is what allows it to learn structu
 
 ---
 
-## 2.3 The Embedding — Where the KPIs Are Determined
+## The Embedding — Where the KPIs Are Determined
 
 ![Downstream embedding and classification head](assets/arch_C_downstream.png)
 
@@ -65,7 +67,7 @@ Classification is a **cosine k-NN (k=5)** over the labelled embeddings — ~3.5 
 
 ---
 
-## 2.4 Training Phases
+## Training Phases
 
 ![Training phase timeline](assets/arch_D_training_phases.png)
 
@@ -77,11 +79,12 @@ Classification is a **cosine k-NN (k=5)** over the labelled embeddings — ~3.5 
 | *2c — DANN* (optional) | + unlabelled target | Domain-adversarial adaptation for cross-domain transfer |
 
 (Phase 2 — an unsupervised contrastive refinement — is retained but skipped in the
-recommended path; it didn't help separation.)
+recommended path; it didn't help separation.) Per-phase hyper-parameters are in
+[implementation.md](implementation.md).
 
 ---
 
-## 2.5 The Live System
+## The Live System
 
 ```
   .pcap upload ─► src/server/app.py (FastAPI)
@@ -100,22 +103,5 @@ flow-count / packet-weighted / confidence-filtered summaries and the **dominant 
 type by packets**.
 
 The web UI ("Signal Atlas") reads a static export when the server is down and the live
-server when it's up — see [features.md](features.md) and [usage.md](usage.md).
-
----
-
-## 2.6 Repository Layout
-
-```
-src/                all Python source (installable via `pip install -e .`)
-  netjepa/          core ML package (data, model, loss, training, downstream, evaluation, scripts)
-  capture/          live packet capture (pcap replay)
-  flows/            flow grouping for the live server
-  model/            server-facing classifier adapter
-  server/           FastAPI + WebSocket backend
-webui/              "Signal Atlas" React/WebGL front-end (its own webui/src/)
-pyproject.toml / setup.py   packaging for the src/ layout
-docs/               this documentation
-doc.md              deep engineering reference
-experimentation_log.md  honest chronological research log
-```
+server when it's up — what it does is in [features.md](features.md), how to drive it is in
+[user-guide.md](user-guide.md), and the serving internals are in [implementation.md](implementation.md).

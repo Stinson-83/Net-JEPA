@@ -1,7 +1,7 @@
 """Publish the trained Net-JEPA model to the Hugging Face Hub.
 
 This uploads the Phase-3 checkpoint, the fitted cosine k-NN classifier, the
-config, and the model card (docs/hf_model_card.md → the repo's README.md) to a
+config, and the model card (docs/model-card.md → the repo's README.md) to a
 Hugging Face *model* repo under YOUR namespace.
 
 You need a Hugging Face account and a write token (https://huggingface.co/settings/tokens).
@@ -17,7 +17,7 @@ Usage
     python src/netjepa/scripts/publish_hf.py --repo-id me/net-jepa --token hf_xxx --private
 
 After it runs, paste the printed URL into README.md ("Models Published") and
-docs/tech-stack.md §4.4.
+docs/tech-stack.md.
 """
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ def main() -> None:
                     help="Config to publish as config.yaml (default: %(default)s)")
     ap.add_argument("--labels", default="data/processed_traffic/labels.json",
                     help="labels.json with the traffic-type names (default: %(default)s)")
-    ap.add_argument("--card", default="docs/hf_model_card.md",
+    ap.add_argument("--card", default="docs/model-card.md",
                     help="Model card → uploaded as README.md (default: %(default)s)")
     ap.add_argument("--umap", default="webui/public/data/traffic8/umap.joblib",
                     help="UMAP reducer for the 2-D atlas (uploaded only with --with-umap)")
@@ -102,7 +102,7 @@ def main() -> None:
     url = f"https://huggingface.co/{args.repo_id}"
     print("\n✅ Published.")
     print(f"   {url}")
-    print("   → paste this link into README.md ('Models Published') and docs/tech-stack.md §4.4")
+    print("   → paste this link into README.md ('Models Published') and docs/tech-stack.md")
 
 
 if __name__ == "__main__":

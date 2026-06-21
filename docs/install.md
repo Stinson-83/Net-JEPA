@@ -1,6 +1,10 @@
-# 6 · Installation & Usage
+# Installation & Running
 
-## 6.1 Prerequisites
+How to install the project, fetch the model + data, reproduce the KPIs, train from scratch,
+classify a `.pcap`, and run the live demo. For *operating* the web UI once it's up, see the
+[user-guide.md](user-guide.md).
+
+## Prerequisites
 
 - Python 3.10+ and Node 20+
 - (Optional) an NVIDIA GPU for faster training — **not** required for inference/serving
@@ -9,7 +13,7 @@
 > **Quick start (one command):** `make reproduce` → install → fetch weights+data → reproduce the KPIs.
 > `make help` lists every shortcut; the explicit steps below are what each target runs.
 
-## 6.2 Install
+## Install
 
 ```bash
 pip install -r requirements.txt   # runtime deps (torch, scapy, fastapi, umap-learn, …)
@@ -21,17 +25,18 @@ These commands are not normally run by hand: every `make` target (e.g. `make dem
 installs automatically on first run and caches the result. The commands above are the manual equivalent
 of `make install`.
 
-All Python source lives under `src/` (see [architecture.md §2.6](architecture.md)). `pip install -e .`
+All Python source lives under `src/` (layout in [implementation.md](implementation.md)). `pip install -e .`
 makes `netjepa`, `server`, etc. importable from any directory. This step is optional: the
 training/eval scripts self-bootstrap their import path, and the server can be launched with
 `--app-dir src` (shown below).
 
-## 6.3 Get the model + data, then run
+## Get the model + data, then run
 
 Two things are **not** committed to the repo and must be fetched: the trained **weights**
-(published on Hugging Face) and the **preprocessed data** (rebuilt from the raw 5G dataset on
+(published on Hugging Face) and the **preprocessed parquet** (rebuilt from the raw 5G dataset on
 Kaggle — its license is *"Unknown"*, so we don't redistribute it; you pull it from the source).
-One command gets both:
+The derived metadata-only feature CSVs *are* committed (`data/traffic_csvs/`). One command gets
+both weights and data:
 
 ```bash
 python src/netjepa/scripts/fetch_assets.py            # weights (HF) + data (Kaggle → preprocess)
@@ -45,7 +50,7 @@ python src/netjepa/scripts/fetch_assets.py            # weights (HF) + data (Kag
 - The published checkpoint also folds in **VLC** (CC-BY-4.0) + **cloud-gaming** (BSD-3) captures on
   top of the 5G base. Add them with `--with-foldins` to match it exactly — **LARGE** (VLC ≈23 GB +
   cloud-gaming ≈28 GB), or grab just the high-value MS-Teams boost (≈2.6 GB) with
-  `--with-foldins --foldin-apps teams`. Details: [datasets.md §3.6](datasets.md).
+  `--with-foldins --foldin-apps teams`. Details: [datasets.md](datasets.md).
 
 ### Way 1 — pretrained (fast): reproduce the KPIs without training
 
@@ -58,7 +63,7 @@ python -m netjepa.scripts.evaluate --config src/netjepa/configs/traffic.yaml \
 
 **Or just `make reproduce`** (= `make install fetch evaluate`).
 
-### Way 2 — from scratch: train everything → see §6.4.
+### Way 2 — from scratch: train everything → see *Train from scratch* below.
 
 ### Run the live demo (either way)
 
@@ -77,12 +82,10 @@ from Hugging Face), waits for it, then opens the UI. `make stop` stops the serve
 terminals if you prefer: `make serve` + `make webui`.)
 
 Open the printed URL. The UI auto-detects the server ("LIVE MODEL" lights up) and also
-works **fully offline** off the committed static export.
+works **fully offline** off the committed static export. What each part of the UI does and how to
+drive it: [user-guide.md](user-guide.md).
 
-**Kiosk / demo deep-links:** `?skipintro` jumps straight to the Atlas; `?scene=proof`
-(or `model`) opens a specific scene; keys `1–3` switch scenes.
-
-## 6.4 Train from scratch (Way 2) — the 8-traffic-type model
+## Train from scratch — the 8-traffic-type model
 
 Shortcut: **`make train DEVICE=cuda`** (run `make fetch-data` first). The 8-class pipeline uses
 `src/netjepa/configs/traffic.yaml` (sets `processed_dir=data/processed_traffic`,
@@ -97,7 +100,7 @@ python -m netjepa.scripts.build_traffic_dataset \
     --raw_dir <5G_dataset_root> \
     --csv_out data/traffic_csvs --parquet_out data/processed_traffic
 #    → per-type CSVs + {pretrain,downstream_train,test,fewshot_eta*}.parquet + labels.json
-#      (host stats computed PER capture — see datasets.md §3.3)
+#      (host stats computed PER capture — see datasets.md)
 
 # 2. Phase 1 — self-supervised pretraining (~15 min on GPU)
 python -m netjepa.scripts.train_phase1  --config $CFG --ckpt_dir checkpoints/traffic8/phase1 --device cuda
@@ -132,13 +135,21 @@ python -m netjepa.scripts.infer_pcap /path/to/capture.pcap \
 #   (or:  make infer PCAP=/path/to/capture.pcap )
 ```
 
+### Measure per-flow latency
+
+```bash
+make latency
+#   → mean / p50 / p95 / p99 per-flow latency (embedding → classification) over all CSV flows
+#   (or: python -m netjepa.scripts.latency_per_flow --device cpu [--max-flows N] [--threads N])
+```
+
 ### Optional — fold in a new dataset
 
 ```bash
 # convert raw captures → Wireshark CSV (add a FOLDER_MAP entry for the new app/category)
 python src/netjepa/scripts/convert_vlc_pcap.py --vlc_dir <raw_dir> \
     --out_dir <5G_dataset_root> --max_packets 600000
-# then re-run steps 1–6 above
+# then re-run the training steps above
 ```
 
 ### Optional — cross-domain adaptation (DANN)
@@ -166,30 +177,20 @@ HF_TOKEN=hf_xxx python src/netjepa/scripts/publish_hf.py --repo-id <your-usernam
 ```
 
 This uploads the Phase-3 checkpoint, the fitted cosine k-NN, the config, and the model card
-([`docs/hf_model_card.md`](hf_model_card.md) → the repo's `README.md`). Then paste the printed
-URL into the top-level README ("Models Published") and [tech-stack.md §4.4](tech-stack.md).
+([`model-card.md`](model-card.md) → the repo's `README.md`). Then paste the printed URL into the
+top-level README ("Models Published") and [tech-stack.md](tech-stack.md).
 
-## 6.5 User guide — the Signal Atlas
-
-| Action | How |
-|---|---|
-| Navigate the embedding view | drag = orbit · scroll = zoom |
-| Inspect a flow | **click any point** → packet "heartbeat", model prediction, k-NN neighbours |
-| Isolate a class | click it in the legend (left); hover for its packet signature |
-| Classify your own traffic | **Upload .pcap** in the bottom dock (live inference if the server is running) |
-| Demonstrate without a pcap | click a **"simulate <class>"** chip to run a representative flow through the pipeline |
-| View the model | top-bar **Model** tab — interactive JEPA, "Explain simply ↔ Show the math" |
-| View the results | **Proof** tab — KPIs, cosine separation, confusion matrix, per-class F1 |
-
-## 6.6 Environment variables (server)
+## Environment variables (server)
 
 | Variable | Default | Description |
 |---|---|---|
-| `NETJEPA_CKPT` | `checkpoints/traffic8/phase3/final.pt` | Trained 8-class checkpoint |
-| `NETJEPA_LABELS` | `data/processed_traffic/labels.json` | the 8 traffic-type names |
+| `NETJEPA_CKPT` | `checkpoints/traffic8/phase3/final.pt` | Trained 8-class checkpoint for live inference |
+| `NETJEPA_LABELS` | `data/processed_traffic/labels.json` | the 8 traffic-type names (auto-fetched from HF) |
 | `DATASET_ID` | `traffic8` | Export dir under `webui/public/data` (cloud + reducer + metrics) |
-| `KNN_PATH` | auto-detected | `knn.joblib` next to the checkpoint |
-| `NETJEPA_HF_REPO` | `kritikahd007/net-jepa` | HF repo the server auto-downloads weights from if the checkpoint is missing |
+| `KNN_PATH` | *(auto-detected)* | `knn.joblib` next to the checkpoint |
+| `NETJEPA_HF_REPO` | `kritikahd007/net-jepa` | HF repo the server auto-downloads weights from if the checkpoint is missing (set empty to disable) |
+| `PCAP_PATH` | *(optional)* | legacy auto-replay on startup; the primary mode is upload → `POST /api/infer` |
+| `REPLAY_SPEED` | `1.0` | Replay speed multiplier (legacy replay mode) |
 | `VITE_PROXY_TARGET` (web) | `http://localhost:8000` | inference server the Vite proxy forwards `/api`+`/ws` to; `make demo` sets it to `:$(PORT)` |
 | `VITE_SERVER_URL` (web) | *(same-origin)* | override only to call the API at an absolute host instead of via the proxy |
 
@@ -197,7 +198,7 @@ The UI talks to the API at the **same origin** (relative `/api`+`/ws`) and Vite 
 server, so for a remote demo you only need to tunnel the **UI port (5173)** — not `:8000`. If `:8000`
 is taken on your host, run `make demo PORT=<free>` (the proxy follows automatically).
 
-## 6.7 Command cheat-sheet — 5 common use cases
+## Command cheat-sheet — 5 common use cases
 
 **No manual setup needed** — every `make` target below installs dependencies automatically on first
 run (and caches it). The non-`make` variants assume you've run `make install` once (or
@@ -234,7 +235,6 @@ auto-downloads the weights from HF if you skip the fetch step.)
 python src/netjepa/scripts/fetch_assets.py --data-only         # data from Kaggle (training needs no weights)
 #   add --with-foldins to match the published config exactly
 make train DEVICE=cuda                                         # build 8-class data → phase1→2b→3 → evaluate
-# — or explicitly: see §6.4 (build_traffic_dataset + traffic.yaml + checkpoints/traffic8) —
 ```
 The dataset comes from **Kaggle**, not HF — we don't republish it (license "Unknown").
 

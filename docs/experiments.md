@@ -1,10 +1,11 @@
-# Net-JEPA — Experimentation Log
+# Experimentation Log
 
 A formal record of the significant changes, experiments, and engineering decisions made
 during the development of Net-JEPA, together with the reasoning behind each and the
 measured outcome. Entries are grouped thematically and ordered roughly chronologically.
-For the current results, see [`docs/results.md`](docs/results.md); for the architecture,
-see [`docs/architecture.md`](docs/architecture.md).
+For the current results, see [results.md](results.md); for the architecture, see
+[architecture.md](architecture.md); for how the work was carried out with agentic tooling,
+see [agentic-ai.md](agentic-ai.md).
 
 Conventions used below: **Problem** (motivation), **Change** (what was done),
 **Reason** (why), **Result** (measured effect or verification).

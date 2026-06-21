@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/netjepa_logo.png" alt="Net-JEPA logo" width="120"/>
+</p>
+
 # Net-JEPA — Technical Documentation
 
 > **Context-Aware Flow Embeddings for Adaptive AI-based Network Traffic Classification**
@@ -8,22 +12,26 @@ the structure of the traffic — packet sizes, timing, and direction — **witho
 any payload**. It learns its representation self-supervised (no labels), then sharpens it
 with supervision.
 
-This folder is the full technical write-up. Read in order, or navigate to a specific topic:
+This folder is the complete technical write-up. Every required topic maps to one document:
 
-| Doc | What's inside |
+| Topic | Document |
 |---|---|
-| [overview.md](overview.md) | Problem, solution, and the **benchmark KPIs (all met)** |
-| [architecture.md](architecture.md) | The JEPA model, training phases, and the live system |
-| [datasets.md](datasets.md) | The 8-traffic-type dataset (Kaggle 5G + VLC + cloud-gaming), preprocessing, and pcap inference |
-| [tech-stack.md](tech-stack.md) | Every OSS library used, with links |
-| [usage.md](usage.md) | Install · train · run the live demo · user guide |
-| [features.md](features.md) | Salient features of the "Signal Atlas" web experience |
-| [results.md](results.md) | Full results: KPIs, per-class, generalization, domain adaptation |
-| [ax.md](ax.md) | **How we used agentic AI tooling** (Claude Code) to build this |
-| [presentation.md](presentation.md) | Slide-by-slide outline for the final pitch |
+| Problem, solution, KPIs at a glance | [overview.md](overview.md) |
+| **Technical architecture** (diagrams) | [architecture.md](architecture.md) |
+| **Implementation details** (code, shapes, hyper-params, serving internals) | [implementation.md](implementation.md) |
+| **Technical stack & list of OSS libraries** (with links) | [tech-stack.md](tech-stack.md) |
+| Datasets, sources, licenses, preprocessing | [datasets.md](datasets.md) |
+| **Installation instructions** (install · fetch · train · run) | [install.md](install.md) |
+| **User guide** (operating the web app) | [user-guide.md](user-guide.md) |
+| **Salient features** (the "Signal Atlas") | [features.md](features.md) |
+| Results & KPIs (per-class, generalization, efficiency) | [results.md](results.md) |
+| Hugging Face model card | [model-card.md](model-card.md) |
+| Agentic-AI build write-up (Claude Code) | [agentic-ai.md](agentic-ai.md) |
+| Experimentation log (bugs, dead ends, fixes) | [experiments.md](experiments.md) |
+| Presentation outline | [presentation.md](presentation.md) |
 
-Deeper engineering reference (ASCII diagrams, every module): [`../doc.md`](../doc.md).
-Honest chronological research log (bugs, dead ends, fixes): [`../experimentation_log.md`](../experimentation_log.md).
+Suggested reading order: overview → architecture → implementation → datasets → results.
+Everything needed to run it is in install.md + user-guide.md.
 
 ## TL;DR — the result
 

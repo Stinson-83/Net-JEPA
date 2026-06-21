@@ -1,9 +1,9 @@
-# 3 · Datasets
+# Datasets
 
 All datasets used are **public**. No data was synthesised; the class imbalance in the
 point cloud reflects real-world capture sizes.
 
-## 3.1 What the model is trained on — 8 common traffic types
+## What the model is trained on — 8 common traffic types
 
 The current model classifies **8 common traffic types**, each built from one or more public
 sources. Unlike the earlier 6-category model, **every traffic type is fully supervised** (no
@@ -24,9 +24,9 @@ and Phase 3 under a single leak-free split.
 **Total: 28,892 flows** → leak-free **70/70/30 full-supervision split**: **20,224 train** (used
 for *both* self-supervised pretraining **and** supervised SupCon + k-NN) and **8,668 test**
 (held out for evaluation only). Using all labels for the supervised stages lifts accuracy to
-**0.997** (leak-free verified); see [results.md §5.3](results.md).
+**0.997** (leak-free verified); see [results.md](results.md).
 
-## 3.2 The three sources
+## The three sources
 
 **Primary — 5G Traffic Dataset (Korea).** [Kaggle ·
 5g-traffic-datasets](https://www.kaggle.com/datasets/kimdaegyeom/5g-traffic-datasets)
@@ -50,7 +50,7 @@ cloud-gaming-network-telemetry](https://www.kaggle.com/datasets/carloshfm/cloud-
 — **BSD-3**. Raw `.pcap` (Xbox Cloud Gaming over 5G). The 5G captures → `CG_Xbox` →
 cloud_gaming.
 
-## 3.3 How the dataset is preprocessed (`build_traffic_dataset.py`)
+## How the dataset is preprocessed (`build_traffic_dataset.py`)
 
 One script builds everything, identically for Kaggle CSVs and VLC/CG captures:
 
@@ -67,7 +67,7 @@ One script builds everything, identically for Kaggle CSVs and VLC/CG captures:
    (one app session), *not* globally. This is the fix that made host-behaviour features
    (`n_dst_ips`, `n_dst_ports`, `n_src_ports`, `conn_per_sec`) both discriminative and
    reproducible at inference (a single uploaded pcap reproduces the same per-capture stats).
-   See `docs/results.md §5.3`.
+   See [results.md](results.md).
 5. **Features** (`features.py`): each flow → a 64×9 `packet_sequence` (size/1500,
    log1p(iat)/10, signed direction, protocol one-hot×4, rtt_norm, rtt_flag) + a 15-D
    `flow_context` (durations, flag ratios, per-capture host stats) + `padding_mask`.
@@ -84,7 +84,7 @@ reproducibility — see `data/traffic_csvs/SOURCES.md` for per-source provenance
 The processed parquet/index (`data/processed_traffic/`) remains **gitignored** and is rebuilt
 from the CSVs (or from source) on demand.
 
-## 3.4 How a raw `.pcap` is processed at inference (identical path)
+## How a raw `.pcap` is processed at inference (identical path)
 
 Uploading a `.pcap` (terminal `infer_pcap.py` or the server `/api/infer`) uses the **same**
 flow-building and feature code as training — this is what makes the trained classes transfer:
@@ -99,9 +99,9 @@ pcap → scapy parse → packet schema (flags + TLS hellos recovered)
 
 `infer_pcap.py` reports per-flow predictions plus three summaries — flow counts,
 **packet-weighted** (big flows dominate), confidence-filtered — and the **dominant traffic
-type by packets**, the headline read on "what is this capture". See `docs/usage.md`.
+type by packets**, the headline read on "what is this capture". See [install.md](install.md).
 
-## 3.5 Building / reproducing the dataset
+## Building / reproducing the dataset
 
 ```bash
 # full 8-class build from the staged raw dir (Kaggle 5G + VLC_* + CG_Xbox folders)
@@ -114,7 +114,7 @@ To stage the VLC / cloud-gaming fold-ins next to the 5G data, `fetch_assets.py -
 downloads VLC from Zenodo (CC-BY-4.0) + cloud-gaming from Kaggle (BSD-3) and converts them
 (`convert_vlc_pcap.py`) into `VLC_*` / `CG_Xbox` folders in the 5G raw dir.
 
-## 3.6 What we publish
+## What we publish
 
 We publish **no new dataset** — all sources above are already public. The repository commits
 the **derived, metadata-only feature CSVs** (`data/traffic_csvs/`, with provenance in
@@ -122,5 +122,5 @@ the **derived, metadata-only feature CSVs** (`data/traffic_csvs/`, with provenan
 times / direction + aggregate counters), with **no payloads, IP addresses, ports, or
 hostnames**, and the raw captures are not redistributed. The VLC (CC-BY-4.0) and cloud-gaming
 (BSD-3) rows are permissively licensed; the 5G-dataset-derived rows fall under that dataset's
-"Unknown" license (§3.2), so anyone reusing them should review its terms. The processed
-parquet/index is not committed and is rebuilt on demand (§3.5).
+"Unknown" license (see *The three sources* above), so anyone reusing them should review its
+terms. The processed parquet/index is not committed and is rebuilt on demand.

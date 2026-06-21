@@ -1,4 +1,4 @@
-# 1 · Overview
+# Overview
 
 ## The problem
 
@@ -67,7 +67,7 @@ inference results.
 - **Meets every KPI**, including the cosine targets that simpler approaches do not reach.
 - **Raw `.pcap` inference** — the same flow/feature pipeline runs at training and
   inference (including per-capture host stats), so a raw browser YouTube capture is correctly
-  classified as `video_on_demand`. See [results.md §5.5](results.md).
+  classified as `video_on_demand`. See [results.md](results.md).
 - **Transparent evaluation** — the one known weak spot (single-flow snippets) is reported rather than omitted.
 - **Real-time on CPU** — ~3.5 ms/flow, deployable at the edge.
 - **Interactive demonstration** — a live atlas of real flows; uploading a `.pcap` runs the model

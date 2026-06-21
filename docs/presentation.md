@@ -1,4 +1,4 @@
-# 9 · Presentation — Slide-by-Slide Outline
+# Presentation — Slide-by-Slide Outline
 
 A presentation outline for the Samsung EnnovateX final. ~10 slides + live demo. Each slide lists
 the key point to convey. Target: 6–8 minutes + demo.
@@ -79,7 +79,7 @@ Key point: The submission reports both where the model works and where it breaks
 
 OSS-only, CPU-deployable, reproducible. Built human-steered with **agentic AI** (Claude Code):
 the human owned the science; the agent handled implementation, debugging, and documentation. Full
-record in `experimentation_log.md`.
+record in [experiments.md](experiments.md) and [agentic-ai.md](agentic-ai.md).
 
 ### Slide 10 — Close
 

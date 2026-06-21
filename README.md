@@ -11,34 +11,35 @@
 
 ### Project Artefacts
 
-- **Technical Documentation** - Full technical write-up is in the [**`docs/`**](docs/) folder
-  ([index](docs/README.md)): [overview](docs/overview.md) · [architecture](docs/architecture.md) ·
+- **Technical Documentation** - The complete technical write-up lives in the
+  [**`docs/`**](docs/) folder ([index](docs/README.md)): [overview](docs/overview.md) ·
+  [architecture](docs/architecture.md) · [implementation details](docs/implementation.md) ·
   [datasets](docs/datasets.md) · [tech-stack & OSS libraries](docs/tech-stack.md) ·
-  [installation & usage](docs/usage.md) · [salient features](docs/features.md) ·
-  [results & KPIs](docs/results.md) · [presentation outline](docs/presentation.md).
-  A deeper engineering reference with ASCII diagrams is in [`doc.md`](doc.md), and a
-  chronological research log (bugs, dead-ends, fixes) is in [`experimentation_log.md`](experimentation_log.md).
-- **[Important]** Agentic-AI write-up: [**`docs/ax.md`**](docs/ax.md) — how we built this
-  human-steered with Claude Code (Opus 4.8), including **what worked and what did not**.
+  [installation](docs/install.md) · [user guide](docs/user-guide.md) ·
+  [salient features](docs/features.md) · [results & KPIs](docs/results.md) ·
+  [model card](docs/model-card.md) · [experimentation log](docs/experiments.md) ·
+  [presentation outline](docs/presentation.md).
+- **[Important]** Agentic-AI write-up: [**`docs/agentic-ai.md`**](docs/agentic-ai.md) — how we
+  built this human-steered with Claude Code (Opus 4.8), including **what worked and what did not**.
 - **Source Code** - All Python source is under [**`src/`**](src/): `src/netjepa/` (core ML
   package — data, model, loss, training phases, downstream, evaluation, scripts), `src/server/`
   (FastAPI + WebSocket inference server), and `src/capture/` + `src/flows/` + `src/model/` (live
   packet capture, flow grouping, classifier adapter). The web front-end is `webui/` (the "Signal
   Atlas" React/WebGL app, with its own `webui/src/`). The package is installable with
   `pip install -e .`; the training/eval scripts also self-bootstrap, so they run directly with
-  `python src/netjepa/scripts/<script>.py`. Install/run steps: [docs/usage.md](docs/usage.md).
+  `python src/netjepa/scripts/<script>.py`. Install/run steps: [docs/install.md](docs/install.md).
   **Quickstart (clone + run):** `make demo` launches the live application — the Signal Atlas UI plus
   trained-model `.pcap` classification, with the weights **auto-downloaded from Hugging Face** and no
   dataset required (the embedding view runs off committed embeddings). `make reproduce` reproduces the
   KPIs; `make help` lists every target. Installation happens automatically on first run.
 - **Models Used** - **None** (no pre-trained / foundation / closed-weight models). Net-JEPA is
-  trained **from scratch** on the datasets below. See [docs/tech-stack.md §4.4](docs/tech-stack.md).
+  trained **from scratch** on the datasets below. See [docs/tech-stack.md](docs/tech-stack.md).
 - **Models Published** - **Hugging Face:
   [`kritikahd007/net-jepa`](https://huggingface.co/kritikahd007/net-jepa)** (**Apache-2.0**) — the
   full trained **8-traffic-type** Net-JEPA model (Phase-3 checkpoint `net_jepa_phase3.pt`, ~1.76M
   params: encoder + fusion + predictor + EMA target + pooling + embedding head + α-centering) plus
   the fitted cosine k-NN (`knn.joblib`), config, `labels.json` (the 8 type names), and model card
-  ([`docs/hf_model_card.md`](docs/hf_model_card.md)). Test KPIs: accuracy **99.7%**, macro-F1
+  ([`docs/model-card.md`](docs/model-card.md)). Test KPIs: accuracy **99.7%**, macro-F1
   **0.992**. Re-publishable from [`src/netjepa/scripts/publish_hf.py`](src/netjepa/scripts/publish_hf.py)
   (`HF_TOKEN=… python src/netjepa/scripts/publish_hf.py --repo-id <user>/net-jepa`); checkpoint is
   also reproducible end-to-end from the training scripts.
@@ -58,7 +59,7 @@
   license (review its terms before reuse); VLC is CC-BY-4.0 and cloud-gaming BSD-3. Everything
   is also **rebuildable from source** — `python src/netjepa/scripts/fetch_assets.py` downloads
   the raw data and preprocesses locally; the processed parquet stays gitignored. See
-  [docs/datasets.md §3.6](docs/datasets.md).
+  [docs/datasets.md](docs/datasets.md).
 
 #### Final Presentation
 

@@ -1,9 +1,9 @@
-# 4 · Technical Stack & Open-Source Libraries
+# Technical Stack & Open-Source Libraries
 
 Everything is open-source. No proprietary services; the model runs and serves on commodity
 CPU. Versions are pinned in `requirements.txt` (Python) and `webui/package.json` (web).
 
-## 4.1 Machine-learning core (Python)
+## Machine-learning core (Python)
 
 | Library | Used for | Link |
 |---|---|---|
@@ -18,7 +18,7 @@ CPU. Versions are pinned in `requirements.txt` (Python) and `webui/package.json`
 | **matplotlib** / **seaborn** | Confusion matrices, distribution plots | https://matplotlib.org · https://seaborn.pydata.org |
 | **Weights & Biases** (optional) | Experiment logging | https://wandb.ai |
 
-## 4.2 Packet processing & serving
+## Packet processing & serving
 
 | Library | Used for | Link |
 |---|---|---|
@@ -29,7 +29,7 @@ CPU. Versions are pinned in `requirements.txt` (Python) and `webui/package.json`
 | **python-multipart** | `.pcap` file uploads | https://github.com/Kludex/python-multipart |
 | **stream-unzip** | Stream-extract only the needed files from a 28 GB Kaggle zip | https://pypi.org/project/stream-unzip |
 
-## 4.3 The "Signal Atlas" front-end (TypeScript)
+## The "Signal Atlas" front-end (TypeScript)
 
 | Library | Used for | Link |
 |---|---|---|
@@ -45,18 +45,18 @@ CPU. Versions are pinned in `requirements.txt` (Python) and `webui/package.json`
 Icons are hand-rolled inline SVG (no icon-library dependency). Fonts: Space Grotesk, Inter,
 JetBrains Mono (Google Fonts).
 
-## 4.4 Models
+## Models
 
 - **Models used:** none pre-trained / no foundation model. Net-JEPA is trained from scratch
   on the datasets in [datasets.md](datasets.md). No closed-weight models are used anywhere.
 - **Models published:** **[`kritikahd007/net-jepa`](https://huggingface.co/kritikahd007/net-jepa)**
   on Hugging Face under **Apache-2.0** — the full trained model (Phase-3 checkpoint, ~1.76M params)
-  + fitted cosine k-NN + config + model card ([`hf_model_card.md`](hf_model_card.md)). Re-publishable
+  + fitted cosine k-NN + config + model card ([`model-card.md`](model-card.md)). Re-publishable
   via `src/netjepa/scripts/publish_hf.py` (`HF_TOKEN=… python src/netjepa/scripts/publish_hf.py
   --repo-id <user>/net-jepa`; add `--with-umap` to also ship the 2-D atlas reducer). Checkpoints are
   gitignored due to size and remain reproducible end-to-end from the scripts.
 
-## 4.5 Rationale for this stack
+## Rationale for this stack
 
 - **CPU-first, edge-deployable** — the PyTorch model is small; serving requires no GPU (~3.5 ms/flow).
 - **No vendor lock-in** — every component is permissively licensed open-source software.

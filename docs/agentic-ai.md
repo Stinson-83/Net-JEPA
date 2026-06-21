@@ -1,4 +1,4 @@
-# 8 · Agentic AI in the Build (Claude Code)
+# Agentic AI in the Build (Claude Code)
 
 > The EnnovateX rubric asks teams to describe how they used **open-weight models and/or
 > agentic development tooling** to implement their solution. This is a factual, verifiable
@@ -13,7 +13,7 @@ under continuous human review.** The delivered model itself (Net-JEPA) ships as 
 (`kritikahd007/net-jepa`) — so the *solution* is open-weight even though the *development
 assistant* is a hosted model.
 
-## 8.1 Agentic AI setup and harness
+## Agentic AI setup and harness
 
 - **Harness.** Claude Code is a terminal-native agentic harness that runs inside the working
   copy of the repository. It plans, calls tools, reads their output, and iterates within a
@@ -26,12 +26,12 @@ assistant* is a hosted model.
   gated behind explicit human approval rather than executed autonomously. A concrete example
   recorded in this repo: publishing the derived feature CSVs (`data/traffic_csvs/`) was paused
   for an explicit decision because the underlying 5G dataset's license is "Unknown"
-  (see [`datasets.md` §3.6](datasets.md) and `data/traffic_csvs/SOURCES.md`).
+  (see [datasets.md](datasets.md) and `data/traffic_csvs/SOURCES.md`).
 - **Topology.** A single human operator and a single primary agent, with **selective
-  sub-agent delegation** for well-scoped batch work (§8.6). There is no standing autonomous
-  or always-on agent in the product itself.
+  sub-agent delegation** for well-scoped batch work (see *Multi-agent orchestration* below).
+  There is no standing autonomous or always-on agent in the product itself.
 
-## 8.2 Instruction and context files (the "agents.md" analogue)
+## Instruction and context files (the "agents.md" analogue)
 
 This project does **not** ship a committed `AGENTS.md`/`CLAUDE.md`. Durable instructions and
 project context were held in two places instead:
@@ -39,13 +39,13 @@ project context were held in two places instead:
 - **A persistent, file-based memory store** maintained by the harness — an indexed
   `MEMORY.md` plus one file per fact (e.g. a running *project-status* note and a *feedback*
   note). This is the closest analogue to an `agents.md`: it is the standing, machine-read
-  context that shapes the agent's behaviour across sessions (§8.3).
+  context that shapes the agent's behaviour across sessions (see *Memory and context handling*).
 - **The live working context** — the repository itself plus the current session transcript.
 
 The repository's `.claude/settings.local.json` records harness/tool settings; no project
 secrets are committed.
 
-## 8.3 Memory and context handling
+## Memory and context handling
 
 - **Persistent cross-session memory.** Facts that needed to survive context resets were
   written to the memory store rather than re-derived. Two that materially changed behaviour:
@@ -56,14 +56,14 @@ secrets are committed.
 - **Long-session context compaction.** The build spanned working sessions longer than a single
   context window. When context filled, the harness summarised the prior portion and resumed
   from that summary without losing the task thread — for example, the full per-flow latency
-  benchmark (§8.5) was launched, the session compacted, and the result was still picked up and
+  benchmark was launched, the session compacted, and the result was still picked up and
   reported on the other side of the boundary.
 - **Lesson.** Externalising durable facts to memory, and trusting compaction for the rest,
   was more reliable than keeping everything in-context. The failure mode to guard against is a
   stale memory; memories were treated as "true when written" and re-verified against the code
   before being acted on.
 
-## 8.4 Reasoning and planning pipelines
+## Reasoning and planning pipelines
 
 - **Read-before-write.** Whole-repo comprehension (across `src/netjepa/`, `src/server/`,
   `webui/`) preceded any change, so edits were made against an understood architecture.
@@ -76,9 +76,10 @@ secrets are committed.
   **0.977 → 0.997**. Crucially the comparison was made **leak-free** — k-NN evaluation that
   excludes neighbours from the *same source capture* — to rule out the obvious confound before
   adopting the result (the leak-free figure, 0.9963, tracked the headline 0.9968).
-- **Root-cause over symptom.** See §8.9 for the central example (per-capture host stats).
+- **Root-cause over symptom.** See *What worked* below for the central example (per-capture
+  host stats), and [experiments.md](experiments.md) for the full investigation log.
 
-## 8.5 Tool use and tool chaining
+## Tool use and tool chaining
 
 Representative end-to-end chains, each a single human-reviewed sequence:
 
@@ -96,18 +97,18 @@ Representative end-to-end chains, each a single human-reviewed sequence:
 re-entered the loop on completion, so the human was not blocked waiting on a multi-minute
 benchmark or build.
 
-## 8.6 Multi-agent / sub-agent orchestration
+## Multi-agent / sub-agent orchestration
 
 The primary loop is single-agent. Where work was naturally parallelisable and well-scoped, it
 was **delegated to a sub-agent** while the main thread continued. The clearest case: the
 repository-cleanup and documentation-formalisation pass (removing dead checkpoints/datasets,
-de-emojifying and restructuring `docs/`, writing `experimentation_log.md`) ran as a delegated
-sub-agent, and the human gated the final commit/push on its completion. Background jobs (§8.5)
+de-emojifying and restructuring `docs/`, writing the experimentation log) ran as a delegated
+sub-agent, and the human gated the final commit/push on its completion. Background jobs
 provided a second, lighter form of parallelism. We did **not** operate a standing multi-agent
 system as part of the product — orchestration was a build-time convenience, used selectively,
 and is described here as exactly that.
 
-## 8.7 MCP servers and skills
+## MCP servers and skills
 
 The Claude Code harness exposes external **MCP servers** (e.g. Canva, Excalidraw, Google
 Drive) and slash-command **skills** (e.g. a multi-agent code-review command). For transparency:
@@ -116,7 +117,7 @@ or external skill** — all build work used the local file, shell, search, and `
 note their availability for completeness and because keeping the core build's dependency
 surface small and auditable was a deliberate choice, not an oversight.
 
-## 8.8 Where the agent was used
+## Where the agent was used
 
 - **Whole-repo comprehension** — mapping how `src/netjepa/`, `src/server/`, and `webui/` fit
   together before changing anything.
@@ -134,10 +135,11 @@ surface small and auditable was a deliberate choice, not an oversight.
   splits), the per-capture host-stats fix, and the terminal `infer_pcap` path.
 - **A full front-end rebuild** — the "Signal Atlas" React/WebGL application, plus the Proof Lab
   upload demos wired to the live FastAPI backend.
-- **Benchmarking** — `latency_per_flow.py` and the `make latency` target (§8.5).
-- **This documentation** — the `docs/` set, `doc.md`, and `experimentation_log.md`.
+- **Benchmarking** — `latency_per_flow.py` and the `make latency` target.
+- **This documentation** — the `docs/` set, including [implementation.md](implementation.md)
+  and [experiments.md](experiments.md).
 
-## 8.9 What worked
+## What worked
 
 - **Fast iteration on difficult bugs.** Read a failure, hypothesise, change, re-run, read the
   new output — the loop substantially compressed debugging cycles.
@@ -153,7 +155,7 @@ surface small and auditable was a deliberate choice, not an oversight.
 - **Documentation and provenance as first-class artifacts** — kept in step with the code,
   including a per-source license/provenance file for the published data.
 
-## 8.10 What did not work, and the human's role
+## What did not work, and the human's role
 
 - **The agent does not originate research direction.** The ideas that actually moved the
   metrics — meeting the cosine KPI with **α-centering**, applying SupCon at the
@@ -178,12 +180,11 @@ surface small and auditable was a deliberate choice, not an oversight.
   deliberately escalated to the human rather than taken by the agent. Agentic tooling amplifies
   both speed and mistakes; review is non-negotiable.
 
-## 8.11 Summary
+## Summary
 
 Agentic AI turned a multi-week build into a fast, human-steered loop: the human owned the
 science and the judgement; the agent handled implementation, plumbing, debugging,
 benchmarking, and documentation, with selective sub-agent and background-job parallelism and a
 persistent memory that carried context across sessions. The result is a project that meets
 every KPI and can demonstrate it, with a complete and auditable record — this `docs/` set and
-[`../experimentation_log.md`](../experimentation_log.md) — of how it was developed, dead ends
-included.
+[experiments.md](experiments.md) — of how it was developed, dead ends included.

@@ -100,7 +100,7 @@ traffic_type = labels[int(knn.predict(emb)[0])]
 
 For end-to-end `.pcap` inference (parse → flow → embed → classify → 2-D projection), use the
 terminal tool `python -m netjepa.scripts.infer_pcap your.pcap --checkpoint <ckpt> --labels labels.json`
-or the FastAPI server (`src/server/app.py`) — see `docs/usage.md`. The flow-building and feature
+or the FastAPI server (`src/server/app.py`) — see `docs/install.md`. The flow-building and feature
 code is **identical** to training (including per-capture host stats), so real captures classify
 correctly (e.g. a browser YouTube capture → `video_on_demand`).
 
