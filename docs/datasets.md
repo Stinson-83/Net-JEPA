@@ -32,8 +32,11 @@ for *both* self-supervised pretraining **and** supervised SupCon + k-NN) and **8
 5g-traffic-datasets](https://www.kaggle.com/datasets/kimdaegyeom/5g-traffic-datasets)
 (`kimdaegyeom/5g-traffic-datasets`); original on
 [IEEE DataPort](https://ieee-dataport.org/documents/5g-traffic-datasets) (Choi, Kim, Ko —
-Kwangwoon University; DOI `10.21227/ewhk-n061`). License **listed as "Unknown" on Kaggle** →
-we **use it under Kaggle's terms but do not redistribute it or any derivative**. Format:
+Kwangwoon University; DOI `10.21227/ewhk-n061`). License **listed as "Unknown" on Kaggle**.
+We use it under Kaggle's terms. The repository commits only **derived, metadata-only feature
+rows** (packet sizes / inter-arrival times / direction — no payloads, IPs, ports, or
+hostnames); the raw captures are not redistributed. Anyone reusing the derived rows should
+review the original dataset's terms (see `data/traffic_csvs/SOURCES.md`). Format:
 Wireshark CSV (`No., Time, Source, Destination, Protocol, Length, Info`).
 
 **VLC / Valencia dataset.** [Zenodo · record 15121418](https://zenodo.org/records/15121418) —
@@ -76,8 +79,10 @@ One script builds everything, identically for Kaggle CSVs and VLC/CG captures:
    - `data/processed_traffic/{pretrain,downstream_train,test,fewshot_eta*}.parquet` — the
      tensors the trainer consumes, + `labels.json` (the 8 type names + `type2id`).
 
-Both `data/traffic_csvs/` and `data/processed_traffic/` are **gitignored** (Kaggle-derived;
-rebuilt from source on demand).
+The derived, metadata-only feature CSVs (`data/traffic_csvs/`) are **committed** for
+reproducibility — see `data/traffic_csvs/SOURCES.md` for per-source provenance and licenses.
+The processed parquet/index (`data/processed_traffic/`) remains **gitignored** and is rebuilt
+from the CSVs (or from source) on demand.
 
 ## 3.4 How a raw `.pcap` is processed at inference (identical path)
 
@@ -109,12 +114,13 @@ To stage the VLC / cloud-gaming fold-ins next to the 5G data, `fetch_assets.py -
 downloads VLC from Zenodo (CC-BY-4.0) + cloud-gaming from Kaggle (BSD-3) and converts them
 (`convert_vlc_pcap.py`) into `VLC_*` / `CG_Xbox` folders in the 5G raw dir.
 
-## 3.6 What we publish (and why not the processed data)
+## 3.6 What we publish
 
-We publish **no new dataset**. All sources above are already public, and we deliberately do
-**not** redistribute the preprocessed parquet/CSVs: they derive from the primary 5G dataset,
-whose license is **"Unknown"** (§3.2), so we have no clear right to re-host a derivative.
-Instead the processed data is **rebuilt from source on demand** (§3.5), keeping reproduction
-one command away while staying within the source licenses. (VLC and cloud-gaming are
-permissively licensed — CC-BY-4.0 / BSD-3 — and could be redistributed with attribution, but
-for simplicity they too are fetched from source.)
+We publish **no new dataset** — all sources above are already public. The repository commits
+the **derived, metadata-only feature CSVs** (`data/traffic_csvs/`, with provenance in
+`SOURCES.md`): each row is statistical metadata for one flow (packet sizes / inter-arrival
+times / direction + aggregate counters), with **no payloads, IP addresses, ports, or
+hostnames**, and the raw captures are not redistributed. The VLC (CC-BY-4.0) and cloud-gaming
+(BSD-3) rows are permissively licensed; the 5G-dataset-derived rows fall under that dataset's
+"Unknown" license (§3.2), so anyone reusing them should review its terms. The processed
+parquet/index is not committed and is rebuilt on demand (§3.5).

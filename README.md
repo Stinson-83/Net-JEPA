@@ -51,11 +51,14 @@
     live_streaming, metaverse, online_gaming, video_conferencing, video_on_demand,
     web_browsing), all fully supervised. Source→type mapping, licenses, preprocessing, and how
     a raw `.pcap` is processed at inference: [docs/datasets.md](docs/datasets.md).
-- **Datasets Published** - None — and deliberately so: our preprocessed parquet derives from the
-  primary 5G set whose license is **"Unknown"**, so we have no clear right to re-host a derivative.
-  Instead it is **rebuilt from source on demand** — `python src/netjepa/scripts/fetch_assets.py`
-  downloads the raw data from Kaggle (under your Kaggle terms) and preprocesses locally. The
-  processed parquet stays gitignored. See [docs/datasets.md §3.6](docs/datasets.md).
+- **Datasets Published** - No new dataset. The repository commits the **derived, metadata-only
+  feature CSVs** (`data/traffic_csvs/`, provenance in `SOURCES.md`): per-flow statistics
+  (packet sizes / inter-arrival times / direction + counters) with **no payloads, IPs, ports,
+  or hostnames**, and no raw captures. The 5G-derived rows fall under that set's **"Unknown"**
+  license (review its terms before reuse); VLC is CC-BY-4.0 and cloud-gaming BSD-3. Everything
+  is also **rebuildable from source** — `python src/netjepa/scripts/fetch_assets.py` downloads
+  the raw data and preprocesses locally; the processed parquet stays gitignored. See
+  [docs/datasets.md §3.6](docs/datasets.md).
 
 #### Final Presentation
 
