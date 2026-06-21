@@ -11,6 +11,7 @@ classify a `.pcap`, and run the live demo. For *operating* the web UI once it's 
 - `tshark` is **not** required (pcap conversion uses scapy)
 
 > **Quick start (one command):** `make reproduce` → install → fetch weights+data → reproduce the KPIs.
+> No Kaggle account? `make reproduce-local` rebuilds from the committed CSVs. From scratch (download → train)? `make reproduce-full`.
 > `make help` lists every shortcut; the explicit steps below are what each target runs.
 
 ## Install

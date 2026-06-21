@@ -60,4 +60,5 @@ JetBrains Mono (Google Fonts).
 
 - **CPU-first, edge-deployable** — the PyTorch model is small; serving requires no GPU (~3.5 ms/flow).
 - **No vendor lock-in** — every component is permissively licensed open-source software.
-- **Reproducible** — a single `requirements.txt`, a single `npm install`, and deterministic seeds.
+- **Reproducible** — a single `requirements.txt` (with `npm install` needed only for the web UI),
+  and deterministic seeds; one `make reproduce` rebuilds the KPIs end-to-end.

@@ -10,13 +10,13 @@ responsibilities, hyper-parameters, loss math, and the repository layout, see
 
 ![Data pipeline — from raw captures to tensors](assets/arch_A_data_features.png)
 
-Raw network captures (`.pcap` or Wireshark CSV) flow through four stages before the
-model sees any data:
+Raw network captures (`.pcap` or Wireshark CSV) are turned into model-ready tensors in
+five steps:
 
 1. **Parse** — extract ports, TCP flags (SYN/ACK/FIN/RST), and TLS Client/Server Hello markers.
 2. **Bidirectional flow grouping** — canonical 5-tuple key; 30 s idle split; flows kept at ≥ 5 and ≤ 64 packets. The client/device is the SYN initiator, else the **private/local endpoint**, else the first packet's source (so direction is correct on real mid-stream captures).
 3. **RTT extraction** — TCP handshake → TLS handshake → first-exchange fallback.
-4. **Per-capture host stats** — `n_dst_ips / n_dst_ports / n_src_ports / conn_per_sec` are computed **per capture** (per `source_file` at train time, per uploaded pcap at inference). This keeps the host-behaviour features both discriminative and identical between training and serving — the fix that took accuracy 0.86 → 0.997 (see [results.md](results.md)).
+4. **Per-capture host stats** — `n_dst_ips / n_dst_ports / n_src_ports / conn_per_sec` are computed **per capture** (per `source_file` at train time, per uploaded pcap at inference). This keeps the host-behaviour features both discriminative and identical between training and serving — the correctness fix that took accuracy 0.86 → 0.977 and made `.pcap` upload work (full supervision later lifted it to 0.997; see [results.md](results.md)).
 5. **Feature tensors**
    - `packet_sequence` **(64 × 9)**: `[size/1500, log1p(IAT), signed direction, proto one-hot×4, rtt_norm, rtt_flag]`
    - `flow_context` **(15,)**: proto, durations, IAT stats, SYN/FIN/RST ratios, pkts/s, per-capture host stats, packet count, RTT

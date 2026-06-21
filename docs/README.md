@@ -7,10 +7,9 @@
 > **Context-Aware Flow Embeddings for Adaptive AI-based Network Traffic Classification**
 > Samsung EnnovateX 2026 · Problem Statement 2 · Team **FlowState** · IIT Kanpur
 
-Net-JEPA classifies **encrypted** 5G network traffic into **8 common traffic types** from
-the structure of the traffic — packet sizes, timing, and direction — **without decrypting
-any payload**. It learns its representation self-supervised (no labels), then sharpens it
-with supervision.
+Net-JEPA classifies **encrypted** 5G traffic into **8 common traffic types** from its *shape* —
+packet sizes, timing, and direction — **without decrypting any payload**. It learns that shape
+self-supervised (no labels), then sharpens it with supervision.
 
 This folder is the complete technical write-up. Every required topic maps to one document:
 

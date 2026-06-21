@@ -53,9 +53,9 @@ The five-KPI table, all met:
 | Generalization (η=7) | ≥85% | **99.6%** |
 | Latency | <100 ms | **3.5 ms** (CPU) |
 
-macro-F1 **0.992** · silhouette **0.87** · 8 traffic types. Runs on CPU. The improvement from
-0.86 came from one fix — per-capture host stats (train/inference-consistent), which also made
-real-`.pcap` upload classify correctly.
+macro-F1 **0.992** · silhouette **0.87** · 8 traffic types. Runs on CPU. The decisive fix —
+per-capture host stats (train/inference-consistent) — took accuracy **0.86 → 0.977** and made
+real-`.pcap` upload classify correctly; full supervision then lifted it to **0.997**.
 
 ### Slide 7 — Live demo
 

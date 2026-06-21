@@ -88,8 +88,9 @@ Raw CSVs (Kaggle) / converted pcaps (VLC, cloud-gaming)
 ```
 
 The decisive correctness property is **per-capture host stats** (computed over one capture, not
-globally) — the change that took accuracy 0.86 → 0.997 and made `.pcap` upload work. The full
-investigation is in [experiments.md](experiments.md); the measured effect in [results.md](results.md).
+globally) — the change that took accuracy 0.86 → 0.977 and made `.pcap` upload work (full
+supervision then took it to 0.997). The full investigation is in [experiments.md](experiments.md);
+the measured effect in [results.md](results.md).
 
 ---
 
@@ -229,8 +230,8 @@ PHASE 2b — Supervised Contrastive Fine-tuning  (≈120 epochs)  (recommended)
   SupCon on CATEGORY labels (the KPI's class level: Youtube+Netflix = intra),
   applied directly on the KEPT, L2-normalised embed_head output (the embedding
   itself — not a throwaway projection), so cosine is optimised where it's measured.
-  Class-BALANCED sampling so minority categories (video-conferencing, ~69 flows)
-  get in-batch positive pairs. Encoder lr 3e-4 / embed_head lr 1e-3, τ=0.05.
+  Class-BALANCED sampling so minority categories (video-conferencing and cloud-gaming,
+  ~520 train flows each) get in-batch positive pairs. Encoder lr 3e-4 / embed_head lr 1e-3, τ=0.05.
   At the end: compute the train-set mean embedding and enable α-centering
   (set_centering, α≈0.65) so absolute inter-cosine drops below 0.3.
 
@@ -328,7 +329,7 @@ The full set of server environment variables (`NETJEPA_CKPT`, `NETJEPA_LABELS`, 
 | VICReg variance term | Prevents dimensional collapse (all embeddings becoming identical) |
 | DBSCAN pseudo-labels | Class-structure signal before any labels; clustered on the full set, labels keyed by flow index, contrastive skipped if <2 clusters |
 | Category-level SupCon + α-centering | Cosine KPI is category-level (Youtube+Netflix=intra) → supervise on categories; SupCon separates directions but leaves a common-mode cone → subtract α·mean to get inter-cosine < 0.3 while keeping intra > 0.7 |
-| Per-capture host stats | Context features computed over the same population at train and serving time — the fix that took accuracy 0.86 → 0.997 and made `.pcap` upload work |
+| Per-capture host stats | Context features computed over the same population at train and serving time — the fix that took accuracy 0.86 → 0.977 and made `.pcap` upload work (full supervision then → 0.997) |
 | min_packets = 5 | Lowered from 10 to recover short flows (~33% more data) without going below the ≥2 needed for IAT/RTT features |
 | Class-weighted CE, not balanced sampling, in Phase 3 heads | One imbalance correction, not two — combining oversampling + weighting collapses the heads onto minority predictions |
 | 143-dim pooled vector (128+15) | Residual connection of raw flow_ctx preserves interpretable stats before the embedding head |

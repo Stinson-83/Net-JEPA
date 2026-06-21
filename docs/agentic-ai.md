@@ -148,7 +148,8 @@ surface small and auditable was a deliberate choice, not an oversight.
   cloud_gaming. The agent diffed train-vs-inference feature tensors, established they were
   byte-identical, and isolated the cause: **host stats computed globally instead of
   per-capture** — an unreproducible train/inference inconsistency. Fixing it lifted accuracy
-  **0.86 → 0.997** and made real-pcap upload work. The remaining weak spot (single-flow pcaps)
+  **0.86 → 0.977** and made real-pcap upload work (full supervision later took it to **0.997**).
+  The remaining weak spot (single-flow pcaps)
   is reported rather than hidden. Agentic tooling made the thorough path the cheap path.
 - **Breadth without loss of focus.** The agent moved between PyTorch training, FastAPI serving,
   and a TypeScript/WebGL front-end while keeping the KPIs in view.

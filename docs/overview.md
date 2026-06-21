@@ -5,13 +5,12 @@
 Modern network traffic is almost entirely **encrypted** (TLS, QUIC). Operators can no
 longer read payloads, yet they still need to know what kind of application a flow is —
 to prioritise a video call over a background download, to provision 5G slices, to detect
-anomalies. Deep Packet Inspection is no longer viable; the question is whether the
-**metadata that encryption cannot hide** — packet sizes, inter-arrival times, direction —
-carries enough signal to classify traffic.
+anomalies. Deep Packet Inspection is no longer viable.
 
-Encryption conceals the content of a flow but not its temporal structure. A Zoom call, a
-Netflix stream, and a cloud-gaming session each exhibit a distinct pattern of packet
-sizes and timing. Net-JEPA learns to classify traffic from that structure.
+But encryption conceals a flow's *content*, not its *shape*. A Zoom call, a Netflix stream,
+and a cloud-gaming session each leave a distinct pattern of packet sizes, inter-arrival times,
+and direction — the **metadata encryption cannot hide**. Net-JEPA learns to classify traffic
+from that shape.
 
 ## Problem statement (Samsung EnnovateX 2026, #2)
 
@@ -36,7 +35,7 @@ classifies in ~3.5 ms on CPU.
 | Traffic type | Apps / sources | Packet signature |
 |---|---|---|
 | Audio Streaming | Spotify | Thin steady downstream, low rate |
-|Cloud Gaming | GeForce NOW, KT GameBox, Xbox Cloud | Fat steady downstream, trickle of control up |
+| Cloud Gaming | GeForce NOW, KT GameBox, Xbox Cloud | Fat steady downstream, trickle of control up |
 | Live Streaming | YouTube Live, AfreecaTV, Naver NOW | Sustained downstream in tight bursts |
 | Metaverse / XR | Roblox, Zepeto | Chatty bidirectional small-packet storms |
 | Online Gaming | PUBG/Battleground, Teamfight Tactics | Rapid tiny UDP datagrams, latency-first |

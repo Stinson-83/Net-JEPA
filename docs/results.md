@@ -17,8 +17,8 @@ only. All cases are reported, including the most difficult classes.
 | Generalization (few-shot, η=7) | ≥ 85% | **99.6%** |
 | Real-time latency / flow | < 100 ms | **3.5 ms** CPU (p95) |
 
-silhouette **0.87** · 8 traffic types · 128-D embedding · 28,892 flows (**20,224 train**
-[pretrain = downstream] / **8,668 test**).
+silhouette **0.87** · 8 traffic types · 128-D embedding · 28,892 flows (**20,224 train**, the
+same 70% used for both pretraining and supervision; **8,668 test**).
 
 ## Per-class F1 (held-out 30% test, 8,668 flows)
 
