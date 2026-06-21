@@ -95,7 +95,7 @@ Key point: No decryption, every KPI met, real-time on CPU, with an interactive d
 1. `uvicorn server.app:app --port 8000` → `curl localhost:8000/api/health` shows `{"ok": true}`.
 2. `cd webui && npm run dev` → open with `?skipintro` for a fast start (or let the intro play).
 3. Have a known `.pcap` on the desktop **and** rehearse the "simulate" chip as the no-network fallback.
-4. Pre-zoom the embedding view to a clear angle; keys `1–4` switch scenes.
+4. Pre-zoom the embedding view to a clear angle; keys `1–3` switch scenes.
 5. If the network is unreliable, the **static export** runs the whole UI offline, so the demonstration does not hard-fail.
 
 See [features.md](features.md) for what each part of the UI does and [results.md](results.md)

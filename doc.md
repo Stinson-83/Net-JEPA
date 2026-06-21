@@ -410,8 +410,8 @@ future work on networks outside the trained sources.
                          │    heartbeat + verdict + k-NN │
                          │  • Drop a .pcap → live infer, │
                          │    pipeline streamed over /ws │
-                         │  • Model / Proof / Journey    │
-                         │    scenes; "LIVE MODEL" light │
+                         │  • Model / Proof scenes;      │
+                         │    "LIVE MODEL" light         │
                          └──────────────────────────────┘
 ```
 

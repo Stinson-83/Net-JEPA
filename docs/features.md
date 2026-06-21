@@ -42,14 +42,13 @@ provides a reliable, repeatable demonstration for a live presentation.
 
 ## 7.5 Four scenes for different audiences
 
-A top-bar switches scenes (keys `1–4`):
+A top-bar switches scenes (keys `1–3`):
 
 | Scene | Audience | What it shows |
 |---|---|---|
 | **Atlas** | general | the embedding view + inspector + inject dock |
 | **Model** | technical | an interactive JEPA diagram with an **"Explain simply ↔ Show the math"** toggle |
 | **Proof** | evaluation | the five KPIs, the cosine-separation plot, confusion matrix, per-class F1 |
-| **Journey** | overview | the research timeline — the bugs, dead-ends, and fixes |
 
 ## 7.6 Intro sequence
 
@@ -67,7 +66,7 @@ in front of an audience.
 ## 7.8 Presentation features
 
 - **Deep-links for kiosk mode:** `?skipintro` opens the Atlas directly; `?scene=proof`
-  (or `model` / `journey`) opens a specific scene; number keys switch scenes live.
+  (or `model`) opens a specific scene; number keys (1–3) switch scenes live.
 - **Design system:** a token-based design system (`src/styles/tokens.css`), Space Grotesk /
   Inter / JetBrains Mono, hand-rolled inline-SVG icons (no icon-library dependency).
 - **Resilient:** an error boundary prevents a render glitch from blanking the screen during a demonstration.

@@ -80,7 +80,7 @@ Open the printed URL. The UI auto-detects the server ("LIVE MODEL" lights up) an
 works **fully offline** off the committed static export.
 
 **Kiosk / demo deep-links:** `?skipintro` jumps straight to the Atlas; `?scene=proof`
-(or `model` / `journey`) opens a specific scene; keys `1–4` switch scenes.
+(or `model`) opens a specific scene; keys `1–3` switch scenes.
 
 ## 6.4 Train from scratch (Way 2) — the 8-traffic-type model
 
@@ -180,7 +180,6 @@ URL into the top-level README ("Models Published") and [tech-stack.md §4.4](tec
 | Demonstrate without a pcap | click a **"simulate <class>"** chip to run a representative flow through the pipeline |
 | View the model | top-bar **Model** tab — interactive JEPA, "Explain simply ↔ Show the math" |
 | View the results | **Proof** tab — KPIs, cosine separation, confusion matrix, per-class F1 |
-| View the development history | **Journey** tab — the research timeline |
 
 ## 6.6 Environment variables (server)
 
