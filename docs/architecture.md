@@ -8,8 +8,6 @@ responsibilities, hyper-parameters, loss math, and the repository layout, see
 
 ## Data → Features
 
-![Data pipeline — from raw captures to tensors](assets/arch_A_data_features.png)
-
 Raw network captures (`.pcap` or Wireshark CSV) are turned into model-ready tensors in
 five steps:
 
@@ -30,8 +28,6 @@ uploaded `.pcap`s. Where the data comes from and how the dataset is assembled is
 
 ## The Model — a JEPA
 
-![Self-supervised JEPA core — dual-branch with VICReg loss](assets/arch_B_jepa_core.png)
-
 Net-JEPA does not reconstruct raw bytes. It predicts *latent representations* of hidden
 flow segments — the JEPA approach — which is what allows it to learn structure without labels.
 
@@ -48,8 +44,6 @@ flow segments — the JEPA approach — which is what allows it to learn structu
 ---
 
 ## The Embedding — Where the KPIs Are Determined
-
-![Downstream embedding and classification head](assets/arch_C_downstream.png)
 
 The downstream embedding is the component the cosine KPI measures, so it receives particular care:
 
@@ -68,8 +62,6 @@ Classification is a **cosine k-NN (k=5)** over the labelled embeddings — ~3.5 
 ---
 
 ## Training Phases
-
-![Training phase timeline](assets/arch_D_training_phases.png)
 
 | Phase | Data | What it does |
 |---|---|---|
