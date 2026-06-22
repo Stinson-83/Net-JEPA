@@ -60,21 +60,6 @@
   the raw data and preprocesses locally; the processed parquet stays gitignored. See
   [docs/datasets.md](docs/datasets.md).
 
-#### Final Presentation
-
-Unlike Phase 1 presentation, in Phase 2 you can freely decide the template, flow and content of your technical presentation. Ensure you cover all aspects of your solution - innovation, novelty, architecture, open datasets/models developed and used, final deliverable details, KPIs of your solution, AI/Agent use, any other details. 
-
-#### Full Submission Demo Video
-
-Create a high quality video demonstration your solution in real life and showcasing how it is actually solves the proposed AX Hackathon problem.
-
-#### Setup & Result Reproducibility Video
-
-To ensure reproducibility of results and to verify the presented KPIs, we require you to create a video demonstrating:
-- Step by step project installation,
-- Data/model download steps, 
-- Execution of all required codes to train the developed models (if any)
-- Execution of all evaluation codes to reproduce the presented results/KPIs 
 
 ### Attribution
 
