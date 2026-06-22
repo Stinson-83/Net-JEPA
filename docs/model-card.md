@@ -137,7 +137,12 @@ All datasets are **public**; the current model trains on **8 traffic types, all 
 }
 ```
 
-Conceptually inspired by I-JEPA (Assran et al., 2023), VICReg (Bardes et al., 2022),
-SupCon (Khosla et al., 2020), and DANN (Ganin & Lempitsky, 2015); adapted to encrypted
-network-flow classification with original contributions (packet-shape encoder + RTT/context
-fusion, α-centering, traffic-type SupCon, and per-capture train/inference-consistent host stats).
+Builds on I-JEPA (Assran et al., 2023) and V-JEPA (Bardes et al., 2024) for the
+joint-embedding / EMA-target architecture and masking; VICReg (Bardes et al., 2022) and SupCon
+(Khosla et al., 2020) for the objectives; Horowicz et al. (IEEE TNSM 2024) for the
+network-behaviour augmentations and few-shot / top-k evaluation; FlowXpert (Zha et al., 2025)
+for the flow-context / host-behaviour features, DBSCAN contrastive, and residual fusion;
+TrafficScope (Zhao et al., KDD 2025) for the cross-attention fusion; and DANN (Ganin &
+Lempitsky, 2015) for the optional domain-adaptation phase. Original contributions: α-centering,
+traffic-type SupCon, and per-capture train/inference-consistent host stats. Full attribution:
+`docs/attributions.md`.

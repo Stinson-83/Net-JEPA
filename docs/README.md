@@ -26,8 +26,8 @@ This folder is the complete technical write-up. Every required topic maps to one
 | Results & KPIs (per-class, generalization, efficiency) | [results.md](results.md) |
 | Hugging Face model card | [model-card.md](model-card.md) |
 | Agentic-AI build write-up (Claude Code) | [agentic-ai.md](agentic-ai.md) |
+| **Attributions & references** (methods, datasets, software) | [attributions.md](attributions.md) |
 | Experimentation log (bugs, dead ends, fixes) | [experiments.md](experiments.md) |
-| Presentation outline | [presentation.md](presentation.md) |
 
 Suggested reading order: overview → architecture → implementation → datasets → results.
 Everything needed to run it is in install.md + user-guide.md.
