@@ -16,7 +16,7 @@ This folder is the complete technical write-up. Every required topic maps to one
 | Topic | Document |
 |---|---|
 | Problem, solution, KPIs at a glance | [overview.md](overview.md) |
-| **Technical architecture** (diagrams) | [architecture.md](architecture.md) |
+| **Technical architecture** | [architecture.md](architecture.md) |
 | **Implementation details** (code, shapes, hyper-params, serving internals) | [implementation.md](implementation.md) |
 | **Technical stack & list of OSS libraries** (with links) | [tech-stack.md](tech-stack.md) |
 | Datasets, sources, licenses, preprocessing | [datasets.md](datasets.md) |
@@ -25,7 +25,7 @@ This folder is the complete technical write-up. Every required topic maps to one
 | **Salient features** (the "Signal Atlas") | [features.md](features.md) |
 | Results & KPIs (per-class, generalization, efficiency) | [results.md](results.md) |
 | Hugging Face model card | [model-card.md](model-card.md) |
-| Agentic-AI build write-up (Claude Code) | [agentic-ai.md](agentic-ai.md) |
+| Agentic-AI build write-up (Claude Code) | [ax.md](ax.md) |
 | **Attributions & references** (methods, datasets, software) | [attributions.md](attributions.md) |
 | Experimentation log (bugs, dead ends, fixes) | [experiments.md](experiments.md) |
 

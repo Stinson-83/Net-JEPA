@@ -7,7 +7,7 @@
 The engineering-level reference: repository layout, the preprocessing code, exact model and
 loss internals, training hyper-parameters, the serving stack, and the key design decisions.
 
-> Companion docs (same folder): conceptual diagrams in [architecture.md](architecture.md);
+> Companion docs (same folder): the conceptual walkthrough in [architecture.md](architecture.md);
 > data sources and dataset assembly in [datasets.md](datasets.md); how to install and run in
 > [install.md](install.md); measured results in [results.md](results.md); the chronological
 > research log in [experiments.md](experiments.md). Index: [README.md](README.md).

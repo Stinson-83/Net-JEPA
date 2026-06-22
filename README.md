@@ -18,7 +18,7 @@
   [salient features](docs/features.md) · [results & KPIs](docs/results.md) ·
   [model card](docs/model-card.md) · [attributions & references](docs/attributions.md) ·
   [experimentation log](docs/experiments.md).
-- **[Important]** Agentic-AI write-up: [**`docs/agentic-ai.md`**](docs/agentic-ai.md) — how we
+- **[Important]** Agentic-AI write-up: [**`docs/ax.md`**](docs/ax.md) — how we
   built this human-steered with Claude Code (Opus 4.8), including **what worked and what did not**.
 - **Source Code** - All Python source is under [**`src/`**](src/): `src/netjepa/` (core ML
   package — data, model, loss, training phases, downstream, evaluation, scripts), `src/server/`
@@ -66,15 +66,21 @@
 This project is **original work**, not a fork of an existing codebase. It is conceptually
 inspired by published research, which we credit:
 
-- **JEPA / I-JEPA** (LeCun; Assran et al., 2023) — the joint-embedding predictive idea.
+- **I-JEPA** (Assran et al., 2023) and **V-JEPA** (2024) — the joint-embedding predictive architecture and masking.
 - **VICReg** (Bardes, Ponce, LeCun, 2022) — the variance/invariance/covariance anti-collapse loss.
 - **Supervised Contrastive Learning** (Khosla et al., 2020) — the category-level SupCon fine-tune.
+- **Horowicz et al.** (IEEE TNSM 2024) — the network-behaviour augmentations (RTT / time-shift / packet-loss) and the few-shot / top-k evaluation.
+- **FlowXpert** (Zha et al., 2025) — the flow-context / host-behaviour features, DBSCAN contrastive, and residual fusion.
+- **TrafficScope** (Zhao et al., KDD 2025) — the temporal × context cross-attention fusion.
 - **DANN** (Ganin & Lempitsky, 2015) — the gradient-reversal domain-adaptation phase.
+
+The full per-method attribution — with the exact file each is used in — is in
+[docs/attributions.md](docs/attributions.md).
 
 We adapted these ideas to **encrypted network-flow classification** and added our own
 contributions: a packet-shape flow encoder with RTT/context fusion, the α-centering
 ("isotropisation") trick that meets the inter-class cosine KPI, category-level SupCon on a kept
 embedding, **per-capture host-stat features that are train/inference-consistent** (the fix that
-took accuracy 0.86 → 0.997 and made real-`.pcap` upload classify correctly), and the
-"Signal Atlas" live demo. All OSS libraries we build on are credited in
-[docs/tech-stack.md](docs/tech-stack.md).
+took accuracy 0.86 → 0.977 and made real-`.pcap` upload classify correctly; full supervision
+then lifted it to 0.997), and the "Signal Atlas" live demo. All OSS libraries we build on are
+credited in [docs/tech-stack.md](docs/tech-stack.md).

@@ -1,6 +1,6 @@
 # Architecture
 
-A high-level tour of the solution, with diagrams. For exact tensor shapes, module
+A high-level tour of the solution. For exact tensor shapes, module
 responsibilities, hyper-parameters, loss math, and the repository layout, see
 [implementation.md](implementation.md). For how to run any of this, see [install.md](install.md).
 

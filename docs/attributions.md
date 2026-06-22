@@ -55,4 +55,4 @@ React, Vite, TypeScript, Tailwind CSS, regl (front-end). All permissively licens
   [`kritikahd007/net-jepa`](https://huggingface.co/kritikahd007/net-jepa) on Hugging Face
   under **Apache-2.0** (checkpoint + fitted cosine k-NN + config). See [model-card.md](model-card.md).
 - Built **human-steered with Claude Code** (agentic development tooling) — see
-  [agentic-ai.md](agentic-ai.md).
+  [ax.md](ax.md).
