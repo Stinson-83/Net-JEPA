@@ -16,8 +16,8 @@
   [datasets](docs/datasets.md) · [tech-stack & OSS libraries](docs/tech-stack.md) ·
   [installation](docs/install.md) · [user guide](docs/user-guide.md) ·
   [salient features](docs/features.md) · [results & KPIs](docs/results.md) ·
-  [model card](docs/model-card.md) · [experimentation log](docs/experiments.md) ·
-  [presentation outline](docs/presentation.md).
+  [model card](docs/model-card.md) · [attributions & references](docs/attributions.md) ·
+  [experimentation log](docs/experiments.md).
 - **[Important]** Agentic-AI write-up: [**`docs/agentic-ai.md`**](docs/agentic-ai.md) — how we
   built this human-steered with Claude Code (Opus 4.8), including **what worked and what did not**.
 - **Source Code** - All Python source is under [**`src/`**](src/): `src/netjepa/` (core ML
