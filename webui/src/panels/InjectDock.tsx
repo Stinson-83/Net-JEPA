@@ -70,6 +70,9 @@ export default function InjectDock() {
                   <span>Capture breakdown</span>
                   <span className="normal-case tracking-normal">
                     {bd.nFlows} flows · dominant <span style={{ color: dom.color }}>{dom.short}</span>
+                    {bd.avgLatencyMs != null && (
+                      <> · <span className="nj-num" style={{ color: 'var(--nj-accent)' }}>{bd.avgLatencyMs.toFixed(1)} ms/flow avg</span></>
+                    )}
                   </span>
                 </div>
                 <div className="mt-1.5 space-y-1">

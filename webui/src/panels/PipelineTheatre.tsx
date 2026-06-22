@@ -6,6 +6,14 @@ export default function PipelineTheatre() {
   const playing = useStore((s) => s.pipelinePlaying);
   const events = useStore((s) => s.liveEvents);
 
+  // Per-flow latency (embedding → classification) streamed live on each `encode`
+  // event. events is newest-first, so [0] is the most recent flow; the running
+  // average updates as flows arrive (the exact full-capture average is reported
+  // with the classification once inference finishes).
+  const latencies = events.filter((e) => e.latency_ms != null).map((e) => e.latency_ms as number);
+  const lastLatency = latencies.length ? latencies[0] : null;
+  const avgLatency = latencies.length ? latencies.reduce((a, b) => a + b, 0) / latencies.length : null;
+
   return (
     <div className="w-full">
       <div className="nj-scroll flex items-stretch gap-0 overflow-x-auto pb-1">
@@ -53,9 +61,26 @@ export default function PipelineTheatre() {
               <span style={{ color: 'var(--nj-text-muted)' }}>{e.stage}</span>
               {e.label && <span style={{ color: 'var(--nj-good)' }}> {e.label}</span>}
               {e.confidence != null && <span> {(e.confidence * 100).toFixed(0)}%</span>}
+              {e.latency_ms != null && <span style={{ color: 'var(--nj-accent)' }}> {e.latency_ms}ms</span>}
               {i < 4 && <span className="px-1 opacity-40">·</span>}
             </span>
           ))}
+        </div>
+      )}
+
+      {/* live per-flow latency — updates as each flow is classified */}
+      {lastLatency != null && (
+        <div className="nj-num mt-1 flex items-center gap-1.5 text-[10px]">
+          <span style={{ color: 'var(--nj-accent)' }}>⚡ latency</span>
+          <span style={{ color: 'var(--nj-text-bright)' }}>{lastLatency.toFixed(1)} ms</span>
+          <span className="opacity-50">last</span>
+          {avgLatency != null && (
+            <>
+              <span className="opacity-40">·</span>
+              <span style={{ color: 'var(--nj-text-bright)' }}>{avgLatency.toFixed(1)} ms</span>
+              <span className="opacity-50">avg · {latencies.length} flows</span>
+            </>
+          )}
         </div>
       )}
     </div>

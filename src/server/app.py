@@ -206,6 +206,10 @@ def _load_runtime() -> None:
         _labels = NETJEPA_LABELS if Path(NETJEPA_LABELS).is_file() else None
         _state['model']   = NetJEPAClassifier.load(NETJEPA_CKPT, knn_path=KNN_PATH or None,
                                                    labels=_labels)
+        # Warm the inference path so the FIRST uploaded flow reads a clean latency
+        # instead of one-off cold-start cost. Best-effort; never blocks startup.
+        if _state['model'].warmup():
+            print('[net-jepa] inference path warmed up.')
 
         umap_json = DATASET_DIR / 'embeddings_umap.json'
         _state['seed_points'] = json.loads(umap_json.read_text()) if umap_json.is_file() else []
@@ -328,6 +332,7 @@ def _infer_pcap_worker(loop: asyncio.AbstractEventLoop,
             'source':       'live',
             'ts':           time.time(),
             'embedding':    [round(float(v), 5) for v in emb[0]],
+            'latency_ms':   latency,
         }
         _append_jsonl(LIVE_STORE, point)
         _state['live_points'].append(point)
@@ -337,8 +342,10 @@ def _infer_pcap_worker(loop: asyncio.AbstractEventLoop,
               'label': pred.category, 'confidence': point['confidence'],
               'flow_summary': point['flow_summary']})
 
+    _lats = [p['latency_ms'] for p in added if p.get('latency_ms') is not None]
     emit({'stage': 'done', 'added': len(added),
-          'total_live': len(_state['live_points'])})
+          'total_live': len(_state['live_points']),
+          'avg_latency_ms': round(sum(_lats) / len(_lats), 2) if _lats else None})
     return added
 
 
@@ -443,8 +450,16 @@ def _summarize(added: List[dict]) -> dict:
         n = float(np.linalg.norm(m))
         if n > 0:
             rep = [round(float(v), 5) for v in (m / n)]
+    # Per-flow latency (embedding → classification) measured during inference;
+    # the average is the headline "how fast on this capture" read.
+    lats = [p['latency_ms'] for p in added if p.get('latency_ms') is not None]
+    avg_latency = round(float(np.mean(lats)), 2) if lats else None
+    p95_latency = round(float(np.percentile(lats, 95)), 2) if lats else None
+    total_latency = round(float(np.sum(lats)), 1) if lats else None
     return {'n_flows': len(added), 'flow_counts': counts,
-            'packet_pct': pct, 'dominant': dominant, 'rep_embedding': rep}
+            'packet_pct': pct, 'dominant': dominant, 'rep_embedding': rep,
+            'avg_latency_ms': avg_latency, 'p95_latency_ms': p95_latency,
+            'total_latency_ms': total_latency}
 
 
 @app.post('/api/infer')

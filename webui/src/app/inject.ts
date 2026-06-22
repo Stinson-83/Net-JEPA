@@ -99,7 +99,8 @@ export async function injectFile(file: File): Promise<void> {
             const c = classCentroid(dominant);
             const conf = s ? (s.packet_pct[dominant] ?? 0) / 100 : pt.confidence;
             const breakdown = s
-              ? { nFlows: s.n_flows, flowCounts: s.flow_counts, packetPct: s.packet_pct, dominant }
+              ? { nFlows: s.n_flows, flowCounts: s.flow_counts, packetPct: s.packet_pct, dominant,
+                  avgLatencyMs: s.avg_latency_ms ?? null, p95LatencyMs: s.p95_latency_ms ?? null }
               : undefined;
             return { x: c?.x ?? pt.x, y: c?.y ?? pt.y, label: dominant, confidence: conf, breakdown };
           }

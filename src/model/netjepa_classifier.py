@@ -257,6 +257,27 @@ class NetJEPAClassifier(Classifier):
         cat = self.labels[label_id] if 0 <= label_id < len(self.labels) else 'unknown'
         return Prediction(label=cat, confidence=float(proba.max()), embedding=emb_np[0], category=cat)
 
+    def warmup(self, iters: int = 3) -> bool:
+        """Run a few dummy forward passes so the FIRST real upload isn't slowed by
+        one-off cold-start cost (torch lazy init, thread-pool spin-up, kNN first
+        call). Shapes match the live path: (1, 64, 9) packets + (1, 15) context +
+        (1, 64) mask. Best-effort — any failure is swallowed so it can never block
+        server startup."""
+        if not self._ensure_loaded():
+            return False
+        try:
+            pkt_t  = torch.zeros(1, MAX_PACKETS, PACKET_FEAT_DIM, dtype=torch.float32, device=self._device)
+            ctx_t  = torch.zeros(1, CONTEXT_DIM, dtype=torch.float32, device=self._device)
+            mask_t = torch.ones(1, MAX_PACKETS, dtype=torch.bool, device=self._device)
+            for _ in range(max(1, iters)):
+                with torch.no_grad():
+                    emb = self._model.forward_downstream(pkt_t, ctx_t, mask_t)
+                if self._knn is not None:
+                    self._knn.predict(emb.cpu().numpy())
+            return True
+        except Exception:  # noqa: BLE001 — warmup is optional, never fatal
+            return False
+
     def save(self, path: str) -> None:
         raise NotImplementedError('Use netjepa/utils/io.save_checkpoint instead.')
 

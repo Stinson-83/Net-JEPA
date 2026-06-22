@@ -94,6 +94,9 @@ export interface InferSummary {
   packet_pct: Record<string, number>;
   dominant: string | null;
   rep_embedding?: number[] | null;   // L2-normalised dominant-class mean — for cosine compare
+  avg_latency_ms?: number | null;    // mean per-flow latency over the capture (ms)
+  p95_latency_ms?: number | null;    // 95th-percentile per-flow latency (ms)
+  total_latency_ms?: number | null;  // summed per-flow latency (ms)
 }
 export interface InferServerResult {
   added: UmapPoint[];

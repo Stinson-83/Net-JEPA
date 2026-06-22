@@ -179,6 +179,10 @@ export interface InferBreakdown {
   flowCounts: Record<string, number>;
   packetPct: Record<string, number>;   // label -> % of packets (sorted desc)
   dominant: string | null;
+  /** Mean per-flow latency (embedding → classification) over this capture, ms. */
+  avgLatencyMs?: number | null;
+  /** 95th-percentile per-flow latency over this capture, ms. */
+  p95LatencyMs?: number | null;
 }
 
 export interface ProjectionResult {
@@ -226,6 +230,8 @@ export interface ServerStageEvent {
   flow_summary?: string;
   added?: number;
   total_live?: number;
+  /** mean per-flow latency over the capture, sent on the `done` event */
+  avg_latency_ms?: number | null;
   error?: string;
   /** client-side receipt time, used for keying/ordering in the ticker */
   at?: number;
