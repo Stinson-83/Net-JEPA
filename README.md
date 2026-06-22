@@ -5,8 +5,8 @@
 - **Team name** - FlowState
 - **Team members (Names)** - Archisman Dhar, Kritik Gupta
 - **Institute/College Name** - Indian Institute of Technology Kanpur
-- **Final Presentation Google Drive Link** - *Upload the PDF presentation for your final submission on Google Drive (It should be openly accessible and not behind any login wall)*
-- **Full Submission Demo Video Link** - *(Upload the Demo video on Youtube as a public or unlisted video and share the link. Google Drive uploads for video is not allowed.)*
+- **Final Presentation Google Drive Link** - https://drive.google.com/file/d/1piCFQ7aQmagk-VXofkM_3vs-Og4hJXww/view?usp=sharing
+- **Full Submission Demo Video Link** - https://youtu.be/SOm_ARobbLQ
 - **Setup & Result Reproducibility Video Link** - https://youtu.be/9hg59ky33hs
 ### Project Artefacts
 
