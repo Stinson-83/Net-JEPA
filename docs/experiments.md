@@ -10,6 +10,19 @@ see [ax.md](ax.md).
 Conventions used below: **Problem** (motivation), **Change** (what was done),
 **Reason** (why), **Result** (measured effect or verification).
 
+> **Leakage fix (2026-08-28).** A capture-level data-leakage bug was found in the split used
+> for the headline results. The earlier flow-level random train/test split put flows from the
+> *same capture session* into both train and test; because the host-behaviour features in
+> `flow_context` (`n_dst_ips`, `n_dst_ports`, `n_src_ports`, `conn_per_sec`) are identical for
+> every flow of a capture, the cosine k-NN could match a test flow to its train siblings on that
+> shared per-capture fingerprint — inflating the numbers. The "same-capture-neighbour-excluded"
+> checks recorded below (sections 9 and 10) did **not** catch this split-level leak. The dataset
+> builder now splits **by capture session** (`GroupShuffleSplit` per class, grouping on
+> `source_file`), so all flows of a capture go entirely to train or entirely to test. This
+> supersedes the retired 70/70/30 numbers (accuracy 0.997 / macro-F1 0.992); the honest
+> leak-free figures are accuracy **0.753** / macro-F1 **0.680** (section 10 and
+> [results.md](results.md)).
+
 ---
 
 ## 1. Preprocessing and flow construction
@@ -223,10 +236,19 @@ training and inference.
 
 **Result.** After rebuild and retrain (70/15/15 split at this stage): k-NN accuracy
 0.860 -> 0.977, macro-F1 0.791 -> 0.954, intra cosine 0.798 -> 0.972, inter cosine
-0.103 -> -0.008, silhouette 0.374 -> 0.703. Verified genuine, not leakage: a leak-free k-NN
-that excludes same-capture neighbours scored 0.9767. Real captures then classified correctly,
-including a held-out browser-QUIC YouTube capture (never in training) reading as
-`video_on_demand`. This single change fixed both the test-set quality and pcap inference.
+0.103 -> -0.008, silhouette 0.374 -> 0.703. This was a genuine *inference-correctness* fix —
+it made the host-stat features reproducible at serving time, so real captures then classified
+correctly, including a held-out browser-QUIC YouTube capture (never in training) reading as
+`video_on_demand`. This single change fixed both pcap inference and the training/inference
+consistency of the feature.
+
+(At the time this was accompanied by a "leak-free k-NN excluding same-capture neighbours"
+check that scored 0.9767, cited as evidence the test-set gain was not leakage. That check was
+later shown to be flawed — it did not account for the *split-level* leak from the flow-level
+train/test partition, in which whole batches of same-capture siblings sit on the train side.
+See the 2026-08-28 note above and section 10 for the correction. The per-capture host-stats
+change remains valid as an inference fix; it is only the accompanying leakage clearance that
+did not hold.)
 
 A note on tooling: the option of replacing the in-house flow construction with an external
 tool (e.g. CICFlowMeter, nfstream) was considered and rejected — CICFlowMeter emits aggregate
@@ -252,15 +274,41 @@ identical held-out 15% test set for a fair comparison.
 k-NN) and the supervised contrastive separation; the held-out evaluation keeps the comparison
 honest.
 
-**Result.** On the same held-out test, full supervision was clearly better: k-NN
-0.977 -> 0.997, macro-F1 0.954 -> 0.992, intra cosine 0.94 -> 0.98, inter -0.01 -> -0.04,
-silhouette 0.70 -> 0.87, few-shot (eta=7) 0.976 -> 0.996. A leak-free check (same-capture
-neighbours excluded) gave 0.9963 versus a naive 0.9968 — confirming the gain is real
-generalization, not a per-capture fingerprint. Full supervision was adopted as the production
-model; `build_traffic_dataset.py` now produces the 70/70/30 split, and the model was
-re-published. Per-class F1 ranges from 0.971 (cloud gaming, the rarest class) to 1.000
-(metaverse). The out-of-domain limitation is unchanged by the split — that is a data-diversity
-question, not a split question.
+**Result (as originally recorded).** On the same held-out test, full supervision appeared
+clearly better: k-NN 0.977 -> 0.997, macro-F1 0.954 -> 0.992, intra cosine 0.94 -> 0.98,
+inter -0.01 -> -0.04, silhouette 0.70 -> 0.87, few-shot (eta=7) 0.976 -> 0.996. A "leak-free"
+check (same-capture neighbours excluded) gave 0.9963 versus a naive 0.9968, and was taken as
+confirmation that the gain was real generalization rather than a per-capture fingerprint. Full
+supervision was adopted, `build_traffic_dataset.py` was set to produce the 70/70/30 split, and
+the model was re-published with per-class F1 from 0.971 (cloud gaming) to 1.000 (metaverse).
+
+**Correction (2026-08-28) — the 0.997 was leakage.** The conclusion above was wrong. Both
+variants split train/test at the **flow level**, so flows from a single capture session were
+scattered across train and test. Since the four host-behaviour features in `flow_context`
+(`n_dst_ips`, `n_dst_ports`, `n_src_ports`, `conn_per_sec`) are computed per `source_file` and
+are therefore *identical for every flow of a capture*, each test flow had many train siblings
+carrying its exact per-capture fingerprint. The cosine k-NN was partly re-identifying the
+*capture*, not classifying the *traffic type*. The "same-capture-neighbour-excluded" check did
+**not** catch this: excluding a handful of nearest same-capture neighbours still leaves the
+capture's fingerprint densely represented among the remaining train flows, so the excluded-kNN
+score stayed near 0.996 and gave false reassurance. The lesson is that a nearest-neighbour
+exclusion cannot detect leakage that is baked into a shared feature value across the whole
+split — only a group-aware split can.
+
+**Corrected outcome.** The builder was changed to split **by capture session**: a per-class
+`GroupShuffleSplit` grouping on `source_file`, so all flows of a capture go entirely to train
+or entirely to test (73 train / 38 test captures, 0 shared). Re-evaluating full supervision on
+this leak-free capture-level 70/30 split gives the honest generalization numbers: k-NN accuracy
+**0.753** (was 0.997), macro-F1 **0.680** (was 0.992), weighted-F1 **0.729**, intra cosine
+**0.87** (was 0.98), inter cosine **0.13** (was -0.04), silhouette **0.475** (was 0.87),
+few-shot (eta=7) **0.773** (was 0.996). Per-class F1 now ranges from **0.988** (online gaming)
+down to **0.139** (video conferencing), with video-on-demand at **0.369** — the classes that
+had ridden on the per-capture fingerprint (video conferencing, video on demand, web browsing)
+collapse once it is removed, while packet-dynamics-driven classes (online/cloud gaming, live
+streaming, metaverse) survive. The capture-level split is now the production configuration and
+supersedes the 70/70/30 numbers throughout. The out-of-domain limitation is unchanged by the
+split — that remains a data-diversity question. See [results.md](results.md) for the full
+per-class breakdown and confusion analysis.
 
 ---
 
@@ -336,9 +384,15 @@ status emoji, and consolidated the experiment record into this log.
 ## Final state (summary)
 
 - Model: 8 traffic types, self-supervised JEPA + traffic-type SupCon + alpha-centering, cosine
-  k-NN classifier, full-supervision 70/70/30 split.
-- KPIs (held-out test): accuracy 0.997, macro-F1 0.992, intra cosine 0.98, inter cosine
-  -0.04, few-shot (eta=7) 0.996, latency 3.5 ms/flow on CPU; all benchmark targets met.
-- Verification: leak-free k-NN 0.996; real and out-of-domain captures classify correctly;
-  single-flow captures are the reported limitation.
+  k-NN classifier, full-supervision on a leak-free **capture-level 70/30 split**
+  (`GroupShuffleSplit` on `source_file`; 111 captures, 73 train / 38 test, 0 shared; 28,892
+  flows -> 19,620 train / 9,272 test).
+- KPIs (held-out test, leak-free): accuracy **0.753**, macro-F1 **0.680**, weighted-F1
+  **0.729**, intra cosine **0.87**, inter cosine **0.13**, silhouette **0.475**, few-shot
+  (eta=7) **0.773**, latency **6.5 ms/flow** on CPU (p95). Intra/inter cosine and latency still
+  clear their targets; **accuracy (0.753) and few-shot (0.773) no longer meet** their ≥90% /
+  ≥85% targets once capture-level leakage is removed.
+- Correction: the retired 70/70/30 numbers (accuracy 0.997, macro-F1 0.992, few-shot 0.996)
+  were inflated by capture-level leakage from a flow-level split; the "leak-free" same-capture
+  exclusion checks (0.9767 / 0.9963) did not detect it. See section 10 and the 2026-08-28 note.
 - Artifacts: published to the Hugging Face Hub; reproducible end-to-end from source.

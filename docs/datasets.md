@@ -8,7 +8,7 @@ point cloud reflects real-world capture sizes.
 The current model classifies **8 common traffic types**, each built from one or more public
 sources. Unlike the earlier 6-category model, **every traffic type is fully supervised** (no
 pretrain-only routing): each type becomes one labelled CSV and is used in Phase 1, Phase 2b
-and Phase 3 under a single leak-free split.
+and Phase 3 under a single capture-level, leak-free split.
 
 | Traffic type | Source folders → type (`build_traffic_dataset.py::FOLDER_TO_TYPE`) | flows |
 |---|---|---|
@@ -21,10 +21,13 @@ and Phase 3 under a single leak-free split.
 | `video_on_demand` | Netflix, YouTube (Kaggle) · VLC_Netflix, VLC_Prime, VLC_YouTube (VLC) | 3,287 |
 | `web_browsing` | VLC_Web | 3,023 |
 
-**Total: 28,892 flows** → leak-free **70/70/30 full-supervision split**: **20,224 train** (used
-for *both* self-supervised pretraining **and** supervised SupCon + k-NN) and **8,668 test**
-(held out for evaluation only). Using all labels for the supervised stages lifts accuracy to
-**0.997** (leak-free verified); see [results.md](results.md).
+**Total: 28,892 flows** → **capture-level 70/30 full-supervision split** (`GroupShuffleSplit`
+on `source_file`, per class): **19,620 train** (~68%; used for *both* self-supervised
+pretraining **and** supervised SupCon + k-NN — train == pretrain == downstream_train) and
+**9,272 test** (~32%; held out for evaluation only). The split is over 111 capture sessions
+(**73 train / 38 test, 0 shared**), so it is **leak-free** — no capture spans train and test,
+which prevents the per-capture host-stat fingerprint from leaking across the split. Under this
+correct split accuracy is **0.753**; see [results.md](results.md).
 
 ## The three sources
 
@@ -71,8 +74,10 @@ One script builds everything, identically for Kaggle CSVs and VLC/CG captures:
 5. **Features** (`features.py`): each flow → a 64×9 `packet_sequence` (size/1500,
    log1p(iat)/10, signed direction, protocol one-hot×4, rtt_norm, rtt_flag) + a 15-D
    `flow_context` (durations, flag ratios, per-capture host stats) + `padding_mask`.
-6. **Leak-free split** (stratified **70/70/30** by class — the 70% train set is used for both
-   pretraining *and* supervised SupCon + k-NN; 30% held out for test; `split` column recorded)
+6. **Leak-free split** (capture-level **70/30** via `GroupShuffleSplit` on `source_file`, per
+   class — all flows of a capture go entirely to train OR test, so no capture spans train and
+   test; the ~70% train set is used for both pretraining *and* supervised SupCon + k-NN, the
+   ~30% held out for test; `split` column recorded)
    and write:
    - `data/traffic_csvs/<type>.csv` — one row per flow with raw arrays (`packet_sizes`,
      `iats`, `directions`) + scalars + `app` reference col + `split` col (human-readable).

@@ -37,7 +37,7 @@ from netjepa.data.rtt import extract_rtt
 from netjepa.data.features import (compute_packet_sequence, compute_flow_context,
                                    compute_src_host_stats)
 from netjepa.utils.logging import get_logger
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GroupShuffleSplit
 
 _log = get_logger('scripts.build_traffic')
 
@@ -112,9 +112,12 @@ def build_parquet_from_csvs(csv_dir: Path, pq_out: Path, seed: int = 42) -> None
             seq, mask = compute_packet_sequence(pkts, 'C', rtt, rv)
             ctx = compute_flow_context(pkts, 'C', rtt, rv, hs)
             cid = TYPE2ID[str(r.traffic_type)]
+            # Prefer the true per-capture source_file (newer CSVs carry it); older CSVs only
+            # stored the folder-level `app`, so fall back to that for the parquet metadata.
+            src = str(getattr(r, 'source_file', r.app))
             records.append({'packet_sequence': seq.tolist(), 'padding_mask': mask.tolist(),
                             'flow_context': ctx.tolist(), 'category_label': cid, 'app_label': cid,
-                            'rtt_valid': rv, 'source_file': str(r.app), 'split': str(r.split)})
+                            'rtt_valid': rv, 'source_file': src, 'split': str(r.split)})
     if not records:
         sys.exit('no flows reconstructed from CSVs.')
 
@@ -225,24 +228,38 @@ def main() -> None:
         flows_by_file[fl['source_file']].append(fl)
     src_stats_by_file = {sf: compute_src_host_stats(fls) for sf, fls in flows_by_file.items()}
 
-    # ── leak-free per-class split (stratified; rare classes -> train) ──
-    # Full-supervision scheme: the model self-pretrains on the train set AND is
-    # supervised (SupCon + kNN) on the SAME train set (downstream_train == pretrain);
-    # the held-out split is used for evaluation only. So train = `pretrain` fraction
-    # (default 70%), test = the remainder (30%). Using all labels for the supervised
-    # stages lifts accuracy 0.86->0.997 (leak-free verified) vs a small labeled slice.
+    # ── leak-free split by CAPTURE SESSION (source_file), stratified per class ──
+    # The host-behaviour features (n_dst_ips / n_dst_ports / n_src_ports / conn_per_sec in
+    # flow_context) are computed PER CAPTURE, so every flow from one source_file shares an
+    # identical 4-value fingerprint. A random *flow-level* split therefore leaks: test flows
+    # land next to train flows from the SAME capture, and the kNN can match them on that
+    # shared fingerprint alone. We split by source_file so all flows from a capture go
+    # ENTIRELY to train OR ENTIRELY to test — never both. To keep every class represented
+    # and the overall ratio near 70/30, we hold out ~30% of *each class's captures*
+    # (GroupShuffleSplit per class, with source_file as the group key). Classes with a single
+    # capture can't be held out, so they stay wholly in train (a warning is logged).
     labels = np.array([TYPE2ID[fl['category_label']] for fl in flows])
+    groups = np.array([fl['source_file'] for fl in flows])
     idx = np.arange(len(flows))
-    counts = Counter(labels.tolist())
-    rare = np.array([counts[l] < 2 for l in labels])           # need >=2 to split 2 ways
-    pre = list(idx[rare])
-    normal = idx[~rare]
-    tr, te = train_test_split(normal, test_size=1 - args.pretrain,
-                              stratify=labels[normal], random_state=args.seed)
-    pre += list(tr)
+    test_frac = 1 - args.pretrain
     split_of = {}
-    for i in pre: split_of[i] = 'pretrain'     # train set (also serves as downstream_train)
-    for i in te:  split_of[i] = 'test'         # held-out evaluation only
+    for c in np.unique(labels):
+        cls_idx = idx[labels == c]
+        cls_groups = groups[cls_idx]
+        n_caps = len(np.unique(cls_groups))
+        if n_caps < 2:
+            for i in cls_idx: split_of[i] = 'pretrain'
+            _log.warning('class id %d (%s) has a single capture -> all %d flows kept in train '
+                         '(cannot hold any out)', c, TRAFFIC_TYPES[c], len(cls_idx))
+            continue
+        gss = GroupShuffleSplit(n_splits=1, test_size=test_frac, random_state=args.seed)
+        tr_rel, te_rel = next(gss.split(cls_idx, labels[cls_idx], groups=cls_groups))
+        for i in cls_idx[tr_rel]: split_of[i] = 'pretrain'    # train (also downstream_train)
+        for i in cls_idx[te_rel]: split_of[i] = 'test'        # held-out evaluation only
+    n_tr = sum(v == 'pretrain' for v in split_of.values())
+    _log.info('capture-level split: %d train / %d test (%.1f%% test) across %d captures',
+              n_tr, len(flows) - n_tr, 100 * (len(flows) - n_tr) / len(flows),
+              len(np.unique(groups)))
 
     # ── write per-type raw-array CSVs (with split col) + parquet records ──
     csv_rows = defaultdict(list)
@@ -254,7 +271,8 @@ def main() -> None:
         st = src_stats.get(client, {})
         ttype = fl['category_label']; split = split_of[i]
         csv_rows[ttype].append({
-            'traffic_type': ttype, 'app': fl['app_label'], 'split': split,
+            'traffic_type': ttype, 'app': fl['app_label'], 'source_file': fl['source_file'],
+            'split': split,
             'protocol_id': int(pkts[0]['protocol_id']),
             'rtt': round(fl['rtt'], 6), 'rtt_valid': bool(fl['rtt_valid']),
             'syn_count': sum(1 for p in pkts if p['is_syn'] and not p['is_syn_ack']),
