@@ -208,9 +208,80 @@ Table \ref{tab:f1} reports the precision, recall, and F1 scores across all 8 tra
   \end{tabular}
 \end{table}
 
-\subsection{The Role of Per-Capture Host Statistics}
+\subsection{Per-Capture vs. Global Host Statistics}
 
-A central design choice in Net-JEPA is the per-capture computation of host-behavior statistics (\texttt{n\_dst\_ips}, \texttt{n\_dst\_ports}, \texttt{n\_src\_ports}, \texttt{conn\_per\_sec}). Computing these features globally across the dataset produces values that a single uploaded capture cannot reproduce, creating a mismatch between the feature distribution seen at training time and the one available at inference. By bounding every statistic to the scope of a single session (or \texttt{.pcap}), the geometry learned during training matches the geometry encountered at deployment. This train-inference consistency is what allows an offline-trained model to be applied directly to raw captures at the edge.
+A central design choice in Net-JEPA is the per-capture computation of host-behavior statistics (\texttt{n\_dst\_ips}, \texttt{n\_dst\_ports}, \texttt{n\_src\_ports}, \texttt{conn\_per\_sec}). Computing these features globally aggregates a client's behaviour across every capture in which its IP appears; in our testbed only 21 distinct client IPs generate all 28,892 flows, so a global statistic merges destinations across unrelated applications and cannot be reproduced from a single uploaded capture at inference. To test whether the per-capture formulation actually helps, we retrain an otherwise identical model whose host statistics are computed globally over the training set, keeping the same capture-level split so that only the host-stat features differ. As shown in Table~\ref{tab:hoststats}, per-capture statistics improve accuracy by 4.4 points and macro-F1 by 1.2 points, and substantially tighten intra-class clustering (cosine $0.72 \rightarrow 0.87$). Global statistics are not merely worse on paper: because they cannot be recreated from a single \texttt{.pcap}, they also break train-inference consistency at deployment.
+
+\begin{table}[h]
+  \caption{Per-capture vs. global host statistics (identical capture-level split; only the host-stat features differ).}
+  \label{tab:hoststats}
+  \centering
+  \begin{tabular}{lcccc}
+    \toprule
+    Host statistics & Accuracy & Macro-F1 & Intra cos & Inter cos \\
+    \midrule
+    Global (over train set)      & 0.709 & 0.668 & 0.717 & 0.117 \\
+    \textbf{Per-capture (ours)}  & \textbf{0.753} & \textbf{0.680} & \textbf{0.868} & \textbf{0.130} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Ablation Studies}
+
+Table~\ref{tab:ablation} isolates each component by removing it from the full pipeline and re-evaluating on the same held-out captures. Two components are clearly load-bearing, and two are not.
+
+\paragraph{$\alpha$-centering is essential for the cosine KPI.} Removing the centering step leaves the embeddings inside a dense shared cone: inter-class cosine rises to $0.558$, violating the $<0.3$ deployment target, and accuracy drops to $0.726$. With centering, inter-class cosine falls to $0.130$ (well within target) while intra-class alignment remains high ($0.868$). This confirms that $\alpha$-centering isotropizes the space as intended rather than acting cosmetically.
+
+\paragraph{Supervised contrastive fine-tuning does the heavy lifting.} Table~\ref{tab:readout} compares three frozen-encoder read-outs on the JEPA-pretrained encoder versus the SupCon-refined encoder. On the raw JEPA encoder the read-outs disagree wildly (a linear/cross-entropy probe collapses to $0.348$ while a $k$-NN reaches $0.681$), indicating a poorly conditioned, non-linearly-separable space. After SupCon, all three read-outs converge to $\approx0.75$: once the encoder is contrastively refined, the choice of classifier barely matters. SupCon, not the read-out, is what makes the embedding usable. (We report frozen-encoder read-outs; full end-to-end fine-tuning is left to future work.)
+
+\paragraph{Self-supervised pretraining and DBSCAN do not measurably help this task.} Two negative results are worth reporting honestly. Skipping Phase-1 JEPA/VICReg pretraining entirely and training SupCon from a randomly initialized encoder does not degrade accuracy---if anything it is slightly higher ($0.788$ vs.\ $0.753$)---suggesting that, at this dataset scale, the supervised contrastive objective alone recovers the useful structure and the predictive pretraining is not contributing to final classification accuracy. Similarly, disabling the periodic DBSCAN auxiliary clustering in Phase~1 leaves every metric unchanged: on this data DBSCAN never discovered $\ge 2$ clusters at the configured density, so its contrastive signal was never activated. We keep both components in the architecture description but do not claim an empirical benefit for them here.
+
+\paragraph{Choice of $k$.} The final $k$-NN is insensitive to $k$: accuracy ranges only $0.752$--$0.754$ over $k \in \{1,3,5,10,15\}$ (Table~\ref{tab:ksweep}). We fix $k=5$.
+
+\begin{table}[h]
+  \caption{Component ablation on the held-out test set. Each row removes/changes one element of the full model.}
+  \label{tab:ablation}
+  \centering
+  \begin{tabular}{lcccc}
+    \toprule
+    Configuration & Accuracy & Macro-F1 & Intra cos & Inter cos \\
+    \midrule
+    \textbf{Full model (ours)}                 & \textbf{0.753} & \textbf{0.680} & 0.868 & \textbf{0.130} \\
+    $-$ $\alpha$-centering                     & 0.726 & 0.670 & 0.923 & 0.558 \\
+    $-$ Phase-1 JEPA pretraining               & 0.788 & 0.709 & 0.866 & 0.098 \\
+    $-$ DBSCAN auxiliary clustering            & 0.753 & 0.680 & 0.856 & 0.127 \\
+    Global host statistics                     & 0.709 & 0.668 & 0.717 & 0.117 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[h]
+  \caption{Frozen-encoder read-out comparison (accuracy / macro-F1). SupCon refinement, not the classifier, drives performance.}
+  \label{tab:readout}
+  \centering
+  \begin{tabular}{lccc}
+    \toprule
+    Encoder & $k$-NN ($k$=5) & Linear (CE) & MLP (CE) \\
+    \midrule
+    JEPA-only (Phase 1)        & 0.681 / 0.604 & 0.348 / 0.199 & 0.662 / 0.553 \\
+    SupCon-refined (Phase 2)   & 0.753 / 0.680 & 0.755 / 0.694 & 0.753 / 0.699 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[h]
+  \caption{Sensitivity to $k$ in the final $k$-NN classifier.}
+  \label{tab:ksweep}
+  \centering
+  \begin{tabular}{lccccc}
+    \toprule
+    $k$ & 1 & 3 & 5 & 10 & 15 \\
+    \midrule
+    Accuracy & 0.752 & 0.753 & 0.753 & 0.754 & 0.754 \\
+    Macro-F1 & 0.681 & 0.679 & 0.680 & 0.680 & 0.681 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 \subsection{Inference on Raw Captures}
 Because feature extraction at inference mirrors the per-capture training pipeline exactly, Net-JEPA accepts raw `.pcap` uploads directly: a capture is parsed into flows, features are computed within the scope of that capture, and each flow is embedded and classified through the frozen $k$-NN. This end-to-end consistency removes the train-inference feature gap and is what enables deployment of the offline-trained model on unseen captures.

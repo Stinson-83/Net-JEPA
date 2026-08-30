@@ -166,6 +166,12 @@ def main() -> None:
     ap.add_argument('--pretrain', type=float, default=0.70)
     ap.add_argument('--downstream', type=float, default=0.15)
     ap.add_argument('--seed', type=int, default=42)
+    ap.add_argument('--global_host_stats', action='store_true',
+                    help='ABLATION ONLY: compute host stats GLOBALLY over the train set (per '
+                         'client_ip, aggregated across all training captures) and apply them to '
+                         'every flow, instead of the default per-capture computation. Used for the '
+                         'per-capture vs global host-stats ablation; keeps the same capture-level '
+                         'split so only the host-stat features differ.')
     args = ap.parse_args()
 
     csv_out = Path(args.csv_out)
@@ -261,13 +267,22 @@ def main() -> None:
               n_tr, len(flows) - n_tr, 100 * (len(flows) - n_tr) / len(flows),
               len(np.unique(groups)))
 
+    # ── ABLATION: global host stats over the TRAIN set (keyed by client_ip) ──
+    global_stats = None
+    if args.global_host_stats:
+        train_flows = [flows[i] for i in range(len(flows)) if split_of[i] == 'pretrain']
+        global_stats = compute_src_host_stats(train_flows)
+        _log.warning('ABLATION global_host_stats: computed GLOBAL stats over %d train flows '
+                     '(%d client IPs); applying to ALL flows instead of per-capture',
+                     len(train_flows), len(global_stats))
+
     # ── write per-type raw-array CSVs (with split col) + parquet records ──
     csv_rows = defaultdict(list)
     records = []
     for i, fl in enumerate(flows):
         pkts, client = fl['packets'], fl['client_ip']
         sizes, iats, dirs = _raw_arrays(pkts, client)
-        src_stats = src_stats_by_file[fl['source_file']]       # per-capture, matches inference
+        src_stats = global_stats if global_stats is not None else src_stats_by_file[fl['source_file']]
         st = src_stats.get(client, {})
         ttype = fl['category_label']; split = split_of[i]
         csv_rows[ttype].append({
