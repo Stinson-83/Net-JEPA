@@ -48,7 +48,7 @@ embedding to predict one of 8 traffic types.
 - **Supervised sharpening:** traffic-type-level **SupCon** on the kept embedding, then
   **α-centering** (common-mode removal, α≈0.65) to isotropise the space.
 - **Classifier:** cosine **k-NN (k=5)**.
-- **Size / speed:** ~1.76 M parameters; **~3.5 ms / flow on CPU** (no GPU needed to serve).
+- **Size / speed:** ~1.76 M parameters; **~6.5 ms / flow on CPU (p95)** (no GPU needed to serve).
 
 ### The eight traffic types
 
@@ -59,14 +59,16 @@ embedding to predict one of 8 traffic types.
 
 | Benchmark KPI | Target | Achieved |
 |---|---|---|
-| Intra-class cosine | > 0.7 | **0.98** |
-| Inter-class cosine | < 0.3 | **−0.04** |
-| Classification accuracy | ≥ 90% | **99.7%** |
-| Generalization (few-shot, η=7) | ≥ 85% | **99.6%** |
-| Real-time latency / flow | < 100 ms | **3.5 ms** (CPU) |
+| Intra-class cosine | > 0.7 | **0.87** |
+| Inter-class cosine | < 0.3 | **0.13** |
+| Classification accuracy | ≥ 90% | **75.3%** |
+| Generalization (few-shot, η=7) | ≥ 85% | **77.3%** |
+| Real-time latency / flow | < 100 ms | **6.5 ms** (CPU, p95) |
 
-macro-F1 **0.992** · silhouette **0.87**. Per-class F1 ranges from 0.971 (cloud gaming, the
-rarest and most difficult class) to 1.000 (metaverse). Full numbers: see the repo's `docs/results.md`.
+macro-F1 **0.680** · weighted-F1 **0.729** · silhouette **0.475**. Per-class F1 ranges from
+0.14 (video conferencing, the hardest class) to 0.99 (online gaming). Hard classes:
+video_conferencing 0.139, video_on_demand 0.369, web_browsing 0.609. Full numbers: see the
+repo's `docs/results.md`.
 
 ## How to use
 
@@ -106,13 +108,13 @@ correctly (e.g. a browser YouTube capture → `video_on_demand`).
 
 ## Training data
 
-All datasets are **public**; the current model trains on **8 traffic types, all fully supervised**:
+All datasets are **public**; the current model trains on **8 labelled traffic types**:
 
 - [Kaggle · 5G Traffic Datasets](https://www.kaggle.com/datasets/kimdaegyeom/5g-traffic-datasets) — primary train/test (license "Unknown" → used under Kaggle terms, not redistributed).
 - [Zenodo · VLC / Valencia](https://zenodo.org/records/15121418) (**CC-BY-4.0**) — full VLC set: Spotify → audio_streaming, Web → web_browsing, Netflix/Prime/YouTube → video_on_demand, Roblox → metaverse, Teams → video_conferencing.
 - [Kaggle · Cloud Gaming Network Telemetry](https://www.kaggle.com/datasets/carloshfm/cloud-gaming-network-telemetry) (**BSD-3**) — Xbox Cloud over 5G → cloud_gaming.
 
-28,892 flows → 20,224 train (pretrain = downstream) / 8,668 test (30%) (leak-free stratified split, full supervision).
+28,892 flows → 19,620 train (pretrain = downstream) / 9,272 test (~32%), capture-level 70/30 leak-free split (per-class GroupShuffleSplit on `source_file`).
 
 ## Intended use & limitations
 

@@ -82,15 +82,15 @@ Raw CSVs (Kaggle) / converted pcaps (VLC, cloud-gaming)
    └─  padding_mask     (64,) bool — True = real packet
    │
    ▼  build_traffic_dataset.py
-   Stratified 70/70/30 split: 70% train (pretrain = downstream, full supervision) / 30% test
+   capture-level 70/30 split (GroupShuffleSplit on source_file; train == pretrain == downstream_train, ~30% held out)
    Few-shot subsets: η ∈ {1, 3, 5, 7, 10} labelled samples per class
    Output: data/traffic_csvs/*.csv + data/processed_traffic/*.parquet + labels.json
 ```
 
 The decisive correctness property is **per-capture host stats** (computed over one capture, not
-globally) — the change that took accuracy 0.86 → 0.977 and made `.pcap` upload work (full
-supervision then took it to 0.997). The full investigation is in [experiments.md](experiments.md);
-the measured effect in [results.md](results.md).
+globally) — the change that took accuracy 0.86 → 0.977 and made `.pcap` upload work. The full
+investigation is in [experiments.md](experiments.md); the measured leak-free headline (capture-level
+70/30, accuracy 0.753) is in [results.md](results.md).
 
 ---
 
@@ -329,7 +329,7 @@ The full set of server environment variables (`NETJEPA_CKPT`, `NETJEPA_LABELS`, 
 | VICReg variance term | Prevents dimensional collapse (all embeddings becoming identical) |
 | DBSCAN pseudo-labels | Class-structure signal before any labels; clustered on the full set, labels keyed by flow index, contrastive skipped if <2 clusters |
 | Category-level SupCon + α-centering | Cosine KPI is category-level (Youtube+Netflix=intra) → supervise on categories; SupCon separates directions but leaves a common-mode cone → subtract α·mean to get inter-cosine < 0.3 while keeping intra > 0.7 |
-| Per-capture host stats | Context features computed over the same population at train and serving time — the fix that took accuracy 0.86 → 0.977 and made `.pcap` upload work (full supervision then → 0.997) |
+| Per-capture host stats | Context features computed over the same population at train and serving time — the fix that took accuracy 0.86 → 0.977 and made `.pcap` upload work (leak-free headline accuracy 0.753 in [results.md](results.md)) |
 | min_packets = 5 | Lowered from 10 to recover short flows (~33% more data) without going below the ≥2 needed for IAT/RTT features |
 | Class-weighted CE, not balanced sampling, in Phase 3 heads | One imbalance correction, not two — combining oversampling + weighting collapses the heads onto minority predictions |
 | 143-dim pooled vector (128+15) | Residual connection of raw flow_ctx preserves interpretable stats before the embedding head |

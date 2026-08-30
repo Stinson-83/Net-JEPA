@@ -36,11 +36,11 @@ Everything needed to run it is in install.md + user-guide.md.
 
 | Benchmark KPI | Target | Achieved |
 |---|---|---|
-| Intra-class cosine | > 0.7 | **0.98** |
-| Inter-class cosine | < 0.3 | **−0.04** |
-| Classification accuracy | ≥ 90% | **99.7%** |
-| Generalization (few-shot, η=7) | ≥ 85% | **99.6%** |
-| Real-time latency / flow | < 100 ms | **3.5 ms** (CPU) |
+| Intra-class cosine | > 0.7 | **0.87** ✓ |
+| Inter-class cosine | < 0.3 | **0.13** ✓ |
+| Classification accuracy | ≥ 90% | **75.3%** ✗ |
+| Generalization (few-shot, η=7) | ≥ 85% | **77.3%** ✗ |
+| Real-time latency / flow | < 100 ms | **6.5 ms** (CPU) ✓ |
 
-macro-F1 **0.992** · silhouette **0.87** · 8 traffic types · 128-D embedding · self-supervised
-on 20k flows · runs on CPU.
+macro-F1 **0.680** · weighted-F1 **0.729** · silhouette **0.475** · 8 traffic types · 128-D embedding · self-supervised
+on 29k flows · runs on CPU.
