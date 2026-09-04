@@ -99,6 +99,20 @@ stats beat global by 4.4 pts; SupCon makes the read-out choice irrelevant (k-NN 
 0.803 ≈ MLP 0.809); and k is insensitive (0.806–0.807 over k∈{1,3,5,10,15}, so k=5).
 († measured on the pre-alignment encoder configuration.)
 
+### Robustness across seeds
+
+Repeating the aligned-vs-random comparison over **three training seeds** (dataset split held fixed):
+
+| Config | seed 42 | seed 1 | seed 2 | mean ± std |
+|---|---|---|---|---|
+| **Aligned JEPA (ours)** | 0.807 | 0.799 | 0.802 | **0.803 ± 0.004** |
+| Random init (no pretraining) | 0.788 | 0.745 | 0.713 | 0.749 ± 0.038 |
+
+The aligned model wins at **every** seed (+0.019 / +0.054 / +0.089) and its run-to-run variance is
+~10× smaller — so predictive pretraining both raises accuracy and stabilizes training. The released
+checkpoint (0.807, seed 42) is within 0.004 of the 3-seed mean, i.e. representative, not cherry-picked.
+(Seeds are set via the `NETJEPA_SEED` env var; the dataset split is unchanged so the test set is identical.)
+
 ## Real-pcap inference
 
 > ⚠️ **Pending re-verification.** The end-to-end `infer_pcap.py` numbers previously published here

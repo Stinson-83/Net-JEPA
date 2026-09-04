@@ -23,6 +23,8 @@ _log = get_logger('training.phase1')
 
 
 def _set_seeds(seed: int = 42) -> None:
+    import os
+    seed = int(os.environ.get('NETJEPA_SEED', seed))   # reproducibility override for seed sweeps
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
