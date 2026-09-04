@@ -39,6 +39,12 @@ def _adaptive_mask(true_len: int, short_thresh: int = 30,
     return visible, masked
 
 
+def _masked_mean(h: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    """Mean-pool encoder tokens over valid (non-pad) positions. mask: True=real."""
+    w = mask.float().unsqueeze(-1)               # (B, T, 1)
+    return (h * w).sum(dim=1) / w.sum(dim=1).clamp(min=1.0)
+
+
 @torch.no_grad()
 def _extract_embeddings_subset(model: NetJEPA, dataset: FlowDataset,
                                 frac: float, device: torch.device,
@@ -69,6 +75,7 @@ def train_phase1(processed_dir: str, ckpt_dir: str = 'checkpoints/phase1',
                  device_str: str = 'cuda',
                  vicreg_alpha: float = 25.0, vicreg_beta: float = 25.0,
                  vicreg_gamma: float = 1.0,
+                 align_weight: float = 0.0,
                  lambda1: float = 1.0, lambda2: float = 0.3,
                  dbscan_eps: float = 0.05, dbscan_min_samples: int = 5,
                  dbscan_refresh: int = 10, dbscan_start: int = 20,
@@ -155,6 +162,21 @@ def train_phase1(processed_dir: str, ckpt_dir: str = 'checkpoints/phase1',
                 alpha=vicreg_alpha, beta=vicreg_beta, gamma=vicreg_gamma)
             epoch_metrics.update(vic_metrics)
 
+            # ── TWEAK: pooled-encoder alignment term ──
+            # Pretrain the exact path the classifier uses (temporal_encoder -> pool):
+            # VICReg invariance between the masked/degraded online view and the clean
+            # EMA-target view of the mean-pooled encoder output. Off when align_weight=0.
+            align_loss = None
+            if align_weight > 0.0:
+                enc_on = model.temporal_encoder(deg_pkt, deg_msk)
+                with torch.no_grad():
+                    enc_tg = model.target_temporal(cln_pkt, cln_msk)
+                pooled_on = _masked_mean(enc_on, deg_msk).unsqueeze(1)            # (B,1,D)
+                pooled_tg = _masked_mean(enc_tg, cln_msk).unsqueeze(1).detach()
+                align_loss, _ = vicreg_loss(pooled_on, pooled_tg,
+                                            alpha=vicreg_alpha, beta=vicreg_beta,
+                                            gamma=vicreg_gamma)
+
             use_contrast = pseudo_valid and epoch >= dbscan_start
             contrast_val = None
             if use_contrast:
@@ -169,6 +191,8 @@ def train_phase1(processed_dir: str, ckpt_dir: str = 'checkpoints/phase1',
                 contrast_val = dbscan_contrastive_loss(flow_embs, batch_pl)
 
             total = composite(vic_loss, contrast_val, use_contrast)
+            if align_loss is not None:
+                total = total + align_weight * align_loss
             opt.zero_grad()
             total.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)

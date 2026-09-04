@@ -38,7 +38,7 @@
 \maketitle
 
 \begin{abstract}
-Modern network traffic is predominantly encrypted, rendering traditional Deep Packet Inspection (DPI) obsolete for application identification. However, while encryption conceals the payload, it leaves the metadata ``shape'' of the traffic intact, including packet sizes, inter-arrival times, and flow direction. In this paper, we propose Net-JEPA, a Context-Aware Joint-Embedding Predictive Architecture designed for encrypted network flow classification. Net-JEPA operates entirely on non-payload metadata and employs a dual-branch Temporal Transformer with cross-attention fusion of global flow contexts. It leverages self-supervised latent prediction with Variance-Invariance-Covariance Regularization (VICReg) to learn robust representations without relying on negative pairs. We further introduce an $\alpha$-centering technique combined with Supervised Contrastive Learning to explicitly optimize and meet stringent embedding cosine similarity requirements. Evaluated on a diverse 8-class traffic dataset encompassing 5G, cloud gaming, and general web applications, Net-JEPA attains an accuracy of 75.3\%, a macro-F1 of 0.680, an intra-class cosine similarity of 0.87, and an inter-class cosine similarity of 0.13, satisfying the target embedding-separation KPIs. Furthermore, by strictly computing host-behavior statistics on a per-capture basis, our model bridges the gap between offline training and real-world edge deployment, providing real-time inference (6.5\,ms per flow on CPU, p95) on raw captures.
+Modern network traffic is predominantly encrypted, rendering traditional Deep Packet Inspection (DPI) obsolete for application identification. However, while encryption conceals the payload, it leaves the metadata ``shape'' of the traffic intact, including packet sizes, inter-arrival times, and flow direction. In this paper, we propose Net-JEPA, a Context-Aware Joint-Embedding Predictive Architecture designed for encrypted network flow classification. Net-JEPA operates entirely on non-payload metadata and employs a dual-branch Temporal Transformer with cross-attention fusion of global flow contexts. It leverages self-supervised latent prediction with Variance-Invariance-Covariance Regularization (VICReg) to learn robust representations without relying on negative pairs. We further introduce an $\alpha$-centering technique combined with Supervised Contrastive Learning to explicitly optimize and meet stringent embedding cosine similarity requirements. Evaluated on a diverse 8-class traffic dataset encompassing 5G, cloud gaming, and general web applications, Net-JEPA attains an accuracy of 80.7\%, a macro-F1 of 0.729, an intra-class cosine similarity of 0.89, and an inter-class cosine similarity of 0.05, satisfying the target embedding-separation KPIs. A key ingredient is aligning the self-supervised objective with the pooled representation the downstream classifier actually uses: doing so turns predictive pretraining from a no-op into a measurable gain (accuracy $0.75 \rightarrow 0.81$). Furthermore, by strictly computing host-behavior statistics on a per-capture basis, our model bridges the gap between offline training and real-world edge deployment, providing real-time inference (7\,ms per flow on CPU, p95) on raw captures.
 \end{abstract}
 
 \section{Introduction}
@@ -55,10 +55,11 @@ Crucially, we address a common pitfall in offline traffic classification: the mi
 
 The contributions of this paper are summarized as follows:
 \begin{itemize}
-    \item We present Net-JEPA, a context-aware predictive architecture for encrypted traffic classification that operates purely on metadata and requires no GPU for real-time inference (6.5\,ms/flow on CPU).
+    \item We present Net-JEPA, a context-aware predictive architecture for encrypted traffic classification that operates purely on metadata and requires no GPU for real-time inference (7\,ms/flow on CPU).
     \item We introduce an $\alpha$-centering technique that, when paired with supervised contrastive learning, explicitly reshapes the embedding space to meet strict cosine similarity KPIs.
+    \item We show that aligning the JEPA pretraining objective with the pooled encoder representation used downstream (rather than a fused representation the classifier discards) is what makes self-supervised pretraining pay off: it lifts accuracy from 0.753 to 0.807 and decorrelates the embedding space.
     \item We identify and resolve the train-inference distribution shift caused by global host statistics, proposing a per-capture feature extraction methodology that enables inference directly on raw `.pcap` files.
-    \item We evaluate Net-JEPA on a comprehensive dataset of 8 traffic types under a capture-level train/test split, achieving an accuracy of 75.3\% (macro-F1 0.680) and few-shot generalization of 77.3\% at $\eta=7$.
+    \item We evaluate Net-JEPA on a comprehensive dataset of 8 traffic types under a capture-level train/test split, achieving an accuracy of 80.7\% (macro-F1 0.729) and few-shot generalization of 80.3\% at $\eta=7$.
 \end{itemize}
 
 \section{Related Work}
@@ -129,7 +130,9 @@ The primary objective is the VICReg loss \cite{bardes2021vicreg} applied to the 
 \end{equation}
 where $s$ is the mean-squared error (invariance), $v$ is a hinge loss maintaining the standard deviation of each embedding dimension above a threshold (variance), and $c$ penalizes off-diagonal terms of the covariance matrix (covariance).
 
-To introduce a coarse class structure, we periodically apply DBSCAN clustering to the full pretraining set (every 10 epochs). If distinct clusters are found, an auxiliary margin-based contrastive loss pulls flows in the same cluster together and pushes flows in different clusters apart.
+\paragraph{Encoder-objective alignment.} The masked-prediction VICReg above operates on a fused token representation that the downstream classifier does not use (the classifier pools the temporal-encoder output directly). Applied alone, this objective did not improve downstream accuracy and its covariance term collapsed. We therefore add a second VICReg term on the \emph{mean-pooled temporal-encoder output} between the degraded (online) view and the clean EMA-target view, so that pretraining shapes the exact $\text{temporal\_encoder} \rightarrow \text{pool}$ path the classifier consumes, and we raise the covariance weight ($\nu:1\rightarrow10$). This decorrelates the representation (covariance $88 \rightarrow 2.8$) and, as a side effect, gives the pooled space enough structure for the DBSCAN step below to activate. As shown in Section~\ref{sec:ablation}, this alignment is what converts Phase-1 pretraining from a no-op into a net gain.
+
+To introduce a coarse class structure, we periodically apply DBSCAN clustering to the full pretraining set (every 10 epochs). If distinct clusters are found, an auxiliary margin-based contrastive loss pulls flows in the same cluster together and pushes flows in different clusters apart. With the aligned, decorrelated representation this clustering discovers hundreds of dense sub-clusters and the auxiliary loss activates; without it the space collapses to a single cluster and the term stays inactive.
 
 \subsubsection{Phase 2: Supervised Contrastive Learning and $\alpha$-Centering}
 In Phase 2, we introduce traffic-type labels. The Temporal Encoder is fine-tuned, and an Embedding Head (a 2-layer MLP) is trained using Supervised Contrastive Learning (SupCon) \cite{khosla2020supcon}. The embedding head outputs a 128-dimensional L2-normalized vector $e_i = f_{head}(Z_{pooled} \oplus C)$.
@@ -147,7 +150,7 @@ SupCon effectively separates class directions but naturally constrains the embed
 where $\alpha \approx 0.65$. This transformation isotropises the space, ``unfolding'' the cone and directly minimizing absolute inter-class similarity while preserving intra-class alignment.
 
 \subsubsection{Phase 3: Downstream Classification}
-In the final phase, all encoder layers and the embedding head are frozen. We compute the $\alpha$-centered embeddings for the entire training set and fit a simple $k$-Nearest Neighbors ($k$-NN, $k=5$) classifier using cosine distance. This provides a highly interpretable and ultra-fast (6.5\,ms, p95) inference path.
+In the final phase, all encoder layers and the embedding head are frozen. We compute the $\alpha$-centered embeddings for the entire training set and fit a simple $k$-Nearest Neighbors ($k$-NN, $k=5$) classifier using cosine distance. This provides a highly interpretable and ultra-fast (7\,ms, p95) inference path.
 
 \section{Experimental Setup}
 
@@ -163,7 +166,7 @@ The model was implemented in PyTorch. Pretraining (Phase 1) ran for 150 epochs u
 
 \subsection{Primary KPIs}
 
-Table \ref{tab:kpi} summarizes Net-JEPA's performance against the target Key Performance Indicators on the held-out test set. The model satisfies the embedding-separation and latency targets, while classification accuracy reaches 75.3\% under the capture-level split.
+Table \ref{tab:kpi} summarizes Net-JEPA's performance against the target Key Performance Indicators on the held-out test set. The model satisfies the embedding-separation and latency targets, while classification accuracy reaches 80.7\% under the capture-level split.
 
 \begin{table}[h]
   \caption{Net-JEPA Performance against Target KPIs on the Held-Out Test Set (9,272 flows).}
@@ -173,20 +176,20 @@ Table \ref{tab:kpi} summarizes Net-JEPA's performance against the target Key Per
     \toprule
     Metric & Target & Achieved \\
     \midrule
-    Intra-class cosine similarity & $> 0.7$ & \textbf{0.87} \\
-    Inter-class cosine similarity & $< 0.3$ & \textbf{0.13} \\
-    Accuracy & $\ge 90\%$ & 75.3\% \\
-    Generalization (few-shot, $\eta=7$) & $\ge 85\%$ & 77.3\% \\
-    Real-time latency per flow & $< 100$\,ms & \textbf{6.5\,ms} (CPU, p95) \\
+    Intra-class cosine similarity & $> 0.7$ & \textbf{0.89} \\
+    Inter-class cosine similarity & $< 0.3$ & \textbf{0.05} \\
+    Accuracy & $\ge 90\%$ & 80.7\% \\
+    Generalization (few-shot, $\eta=7$) & $\ge 85\%$ & 80.3\% \\
+    Real-time latency per flow & $< 100$\,ms & \textbf{7\,ms} (CPU, p95) \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-The combination of SupCon and $\alpha$-centering yields well-separated embeddings: same-class flows remain tightly aligned (intra-class cosine $0.87$) while different-class flows are pushed apart to an inter-class cosine of $0.13$, comfortably below the $0.3$ target. The overall embedding space achieves a Silhouette score of $0.475$.
+The combination of SupCon and $\alpha$-centering yields well-separated embeddings: same-class flows remain tightly aligned (intra-class cosine $0.89$) while different-class flows are pushed apart to an inter-class cosine of $0.05$, comfortably below the $0.3$ target. The overall embedding space achieves a Silhouette score of $0.552$.
 
 \subsection{Class-wise Performance}
 
-Table \ref{tab:f1} reports the precision, recall, and F1 scores across all 8 traffic categories, for an overall macro-F1 of $0.680$ (weighted-F1 $0.729$). Performance is strongest on Online Gaming, Live Streaming, Metaverse/XR, and Cloud Gaming, whose packet-level dynamics are highly distinctive and transfer cleanly to unseen capture sessions. The remaining classes are considerably harder: Web Browsing, Video on Demand, and Video Conferencing exhibit overlapping metadata shapes and account for the majority of the classifier's errors, marking a clear direction for future work. Notably, Video on Demand retains high precision ($0.823$) but low recall ($0.238$)-when it commits to the class it is usually correct, but it frequently abstains toward neighbouring classes.
+Table \ref{tab:f1} reports the precision, recall, and F1 scores across all 8 traffic categories, for an overall macro-F1 of $0.729$ (weighted-F1 $0.764$). Performance is strongest on Online Gaming, Cloud Gaming, Metaverse/XR, Audio Streaming, and Live Streaming (all F1 $\ge 0.85$), whose packet-level dynamics are highly distinctive and transfer cleanly to unseen capture sessions. The remaining classes are considerably harder: Web Browsing ($0.75$), Video on Demand ($0.28$), and Video Conferencing ($0.20$) exhibit overlapping metadata shapes and account for the majority of the classifier's errors, marking a clear direction for future work. Notably, Video on Demand retains high precision ($0.842$) but low recall ($0.171$)-when it commits to the class it is usually correct, but it frequently abstains toward neighbouring classes.
 
 \begin{table}[h]
   \caption{Per-class Precision, Recall, and F1 Score (Held-out test, 9,272 flows).}
@@ -196,21 +199,21 @@ Table \ref{tab:f1} reports the precision, recall, and F1 scores across all 8 tra
     \toprule
     Traffic Type & Precision & Recall & F1 Score \\
     \midrule
-    Online Gaming & 0.978 & 0.998 & \textbf{0.988} \\
-    Live Streaming & 0.923 & 0.861 & \textbf{0.891} \\
-    Metaverse / XR & 0.733 & 0.996 & \textbf{0.845} \\
-    Cloud Gaming & 0.711 & 0.967 & \textbf{0.819} \\
-    Audio Streaming & 0.801 & 0.758 & \textbf{0.779} \\
-    Web Browsing & 0.549 & 0.684 & \textbf{0.609} \\
-    Video on Demand & 0.823 & 0.238 & \textbf{0.369} \\
-    Video Conferencing & 0.140 & 0.138 & \textbf{0.139} \\
+    Online Gaming & 0.952 & 0.997 & \textbf{0.974} \\
+    Cloud Gaming & 0.935 & 0.957 & \textbf{0.946} \\
+    Metaverse / XR & 0.864 & 0.995 & \textbf{0.925} \\
+    Audio Streaming & 0.835 & 0.992 & \textbf{0.907} \\
+    Live Streaming & 0.836 & 0.861 & \textbf{0.849} \\
+    Web Browsing & 0.624 & 0.949 & \textbf{0.753} \\
+    Video on Demand & 0.842 & 0.171 & \textbf{0.284} \\
+    Video Conferencing & 0.364 & 0.133 & \textbf{0.195} \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 \subsection{Per-Capture vs. Global Host Statistics}
 
-A central design choice in Net-JEPA is the per-capture computation of host-behavior statistics (\texttt{n\_dst\_ips}, \texttt{n\_dst\_ports}, \texttt{n\_src\_ports}, \texttt{conn\_per\_sec}). Computing these features globally aggregates a client's behaviour across every capture in which its IP appears; in our testbed only 21 distinct client IPs generate all 28,892 flows, so a global statistic merges destinations across unrelated applications and cannot be reproduced from a single uploaded capture at inference. To test whether the per-capture formulation actually helps, we retrain an otherwise identical model whose host statistics are computed globally over the training set, keeping the same capture-level split so that only the host-stat features differ. As shown in Table~\ref{tab:hoststats}, per-capture statistics improve accuracy by 4.4 points and macro-F1 by 1.2 points, and substantially tighten intra-class clustering (cosine $0.72 \rightarrow 0.87$). Global statistics are not merely worse on paper: because they cannot be recreated from a single \texttt{.pcap}, they also break train-inference consistency at deployment.
+A central design choice in Net-JEPA is the per-capture computation of host-behavior statistics (\texttt{n\_dst\_ips}, \texttt{n\_dst\_ports}, \texttt{n\_src\_ports}, \texttt{conn\_per\_sec}). Computing these features globally aggregates a client's behaviour across every capture in which its IP appears; in our testbed only 21 distinct client IPs generate all 28,892 flows, so a global statistic merges destinations across unrelated applications and cannot be reproduced from a single uploaded capture at inference. To test whether the per-capture formulation actually helps, we retrain an otherwise identical model whose host statistics are computed globally over the training set, keeping the same capture-level split so that only the host-stat features differ. As shown in Table~\ref{tab:hoststats}, per-capture statistics improve accuracy by 4.4 points and macro-F1 by 1.2 points, and substantially tighten intra-class clustering (cosine $0.72 \rightarrow 0.87$). Global statistics are not merely worse on paper: because they cannot be recreated from a single \texttt{.pcap}, they also break train-inference consistency at deployment. (Table~\ref{tab:hoststats} is the controlled per-capture vs.\ global comparison on the base configuration; the final model of Table~\ref{tab:kpi} keeps per-capture statistics and adds the encoder-aligned pretraining of Section~\ref{sec:ablation}, reaching $0.807$ accuracy.)
 
 \begin{table}[h]
   \caption{Per-capture vs. global host statistics (identical capture-level split; only the host-stat features differ).}
@@ -221,22 +224,23 @@ A central design choice in Net-JEPA is the per-capture computation of host-behav
     Host statistics & Accuracy & Macro-F1 & Intra cos & Inter cos \\
     \midrule
     Global (over train set)      & 0.709 & 0.668 & 0.717 & 0.117 \\
-    \textbf{Per-capture (ours)}  & \textbf{0.753} & \textbf{0.680} & \textbf{0.868} & \textbf{0.130} \\
+    Per-capture (base config)    & 0.753 & 0.680 & 0.868 & 0.130 \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 \subsection{Ablation Studies}
+\label{sec:ablation}
 
-Table~\ref{tab:ablation} isolates each component by removing it from the full pipeline and re-evaluating on the same held-out captures. Two components are clearly load-bearing, and two are not.
+Table~\ref{tab:ablation} isolates each component by removing it from the full pipeline and re-evaluating on the same held-out captures.
 
-\paragraph{$\alpha$-centering is essential for the cosine KPI.} Removing the centering step leaves the embeddings inside a dense shared cone: inter-class cosine rises to $0.558$, violating the $<0.3$ deployment target, and accuracy drops to $0.726$. With centering, inter-class cosine falls to $0.130$ (well within target) while intra-class alignment remains high ($0.868$). This confirms that $\alpha$-centering isotropizes the space as intended rather than acting cosmetically.
+\paragraph{$\alpha$-centering is essential for the cosine KPI.} Removing the centering step leaves the embeddings inside a dense shared cone: inter-class cosine rises to $0.558$, violating the $<0.3$ deployment target, and accuracy drops to $0.726$. With centering, inter-class cosine falls to $0.130$ (well within target) while intra-class alignment remains high ($0.868$). This confirms that $\alpha$-centering isotropizes the space as intended rather than acting cosmetically. (These two rows are measured on the pre-alignment configuration; the aligned full model reaches inter-class cosine $0.05$.)
 
-\paragraph{Supervised contrastive fine-tuning does the heavy lifting.} Table~\ref{tab:readout} compares three frozen-encoder read-outs on the JEPA-pretrained encoder versus the SupCon-refined encoder. On the raw JEPA encoder the read-outs disagree wildly (a linear/cross-entropy probe collapses to $0.348$ while a $k$-NN reaches $0.681$), indicating a poorly conditioned, non-linearly-separable space. After SupCon, all three read-outs converge to $\approx0.75$: once the encoder is contrastively refined, the choice of classifier barely matters. SupCon, not the read-out, is what makes the embedding usable. (We report frozen-encoder read-outs; full end-to-end fine-tuning is left to future work.)
+\paragraph{Encoder-objective alignment converts pretraining into a gain.} The central pretraining finding is that \emph{how} the self-supervised objective is connected to the downstream representation matters more than its presence. With the original objective---VICReg on a fused token representation the classifier discards---Phase-1 pretraining did not help: training SupCon from a randomly initialized encoder was in fact marginally better ($0.788$ vs.\ $0.753$). Once the objective is aligned with the pooled encoder path the classifier uses (Section 3.3.1), pretraining becomes a net positive: accuracy rises to $0.807$ and macro-F1 to $0.729$, above both the un-aligned pretrained model and the no-pretraining baseline. The alignment also decorrelates the space (VICReg covariance $88 \rightarrow 2.8$), which in turn lets the DBSCAN auxiliary clustering discover structure (from a single collapsed cluster to several hundred), so its contrastive term---inactive in the base configuration---now engages. Few-shot generalization improves and stabilizes in lockstep ($\eta{=}7$: $0.773 \rightarrow 0.803$, with per-repeat standard deviation shrinking from $\pm0.03$ to $\pm0.001$).
 
-\paragraph{Self-supervised pretraining and DBSCAN do not measurably help this task.} Two negative results are worth reporting honestly. Skipping Phase-1 JEPA/VICReg pretraining entirely and training SupCon from a randomly initialized encoder does not degrade accuracy---if anything it is slightly higher ($0.788$ vs.\ $0.753$)---suggesting that, at this dataset scale, the supervised contrastive objective alone recovers the useful structure and the predictive pretraining is not contributing to final classification accuracy. Similarly, disabling the periodic DBSCAN auxiliary clustering in Phase~1 leaves every metric unchanged: on this data DBSCAN never discovered $\ge 2$ clusters at the configured density, so its contrastive signal was never activated. We keep both components in the architecture description but do not claim an empirical benefit for them here.
+\paragraph{Supervised contrastive fine-tuning does the heavy lifting.} Table~\ref{tab:readout} compares three frozen-encoder read-outs on the JEPA-pretrained encoder versus the SupCon-refined encoder. On the raw JEPA encoder the read-outs disagree (a linear/cross-entropy probe reaches only $0.507$ while a $k$-NN reaches $0.656$ and an MLP $0.691$), indicating a poorly conditioned space. After SupCon, all three read-outs converge (k-NN $0.807$, linear $0.803$, MLP $0.809$): once the encoder is contrastively refined, the choice of classifier barely matters. SupCon, not the read-out, is what makes the embedding usable. (We report frozen-encoder read-outs; full end-to-end fine-tuning is left to future work.)
 
-\paragraph{Choice of $k$.} The final $k$-NN is insensitive to $k$: accuracy ranges only $0.752$--$0.754$ over $k \in \{1,3,5,10,15\}$ (Table~\ref{tab:ksweep}). We fix $k=5$.
+\paragraph{Choice of $k$.} The final $k$-NN is insensitive to $k$: accuracy ranges only $0.806$--$0.807$ over $k \in \{1,3,5,10,15\}$ (Table~\ref{tab:ksweep}). We fix $k=5$.
 
 \begin{table}[h]
   \caption{Component ablation on the held-out test set. Each row removes/changes one element of the full model.}
@@ -246,13 +250,14 @@ Table~\ref{tab:ablation} isolates each component by removing it from the full pi
     \toprule
     Configuration & Accuracy & Macro-F1 & Intra cos & Inter cos \\
     \midrule
-    \textbf{Full model (ours)}                 & \textbf{0.753} & \textbf{0.680} & 0.868 & \textbf{0.130} \\
-    $-$ $\alpha$-centering                     & 0.726 & 0.670 & 0.923 & 0.558 \\
-    $-$ Phase-1 JEPA pretraining               & 0.788 & 0.709 & 0.866 & 0.098 \\
-    $-$ DBSCAN auxiliary clustering            & 0.753 & 0.680 & 0.856 & 0.127 \\
-    Global host statistics                     & 0.709 & 0.668 & 0.717 & 0.117 \\
+    \textbf{Full model (aligned JEPA, ours)}   & \textbf{0.807} & \textbf{0.729} & \textbf{0.893} & \textbf{0.050} \\
+    $-$ encoder-objective alignment            & 0.753 & 0.680 & 0.868 & 0.130 \\
+    $-$ Phase-1 pretraining (random init)      & 0.788 & 0.709 & 0.866 & 0.098 \\
+    $-$ $\alpha$-centering $\dagger$           & 0.726 & 0.670 & 0.923 & 0.558 \\
+    Global host statistics $\dagger$           & 0.709 & 0.668 & 0.717 & 0.117 \\
     \bottomrule
-  \end{tabular}
+  \end{tabular}\\[2pt]
+  {\footnotesize $\dagger$ measured on the pre-alignment configuration.}
 \end{table}
 
 \begin{table}[h]
@@ -263,8 +268,8 @@ Table~\ref{tab:ablation} isolates each component by removing it from the full pi
     \toprule
     Encoder & $k$-NN ($k$=5) & Linear (CE) & MLP (CE) \\
     \midrule
-    JEPA-only (Phase 1)        & 0.681 / 0.604 & 0.348 / 0.199 & 0.662 / 0.553 \\
-    SupCon-refined (Phase 2)   & 0.753 / 0.680 & 0.755 / 0.694 & 0.753 / 0.699 \\
+    JEPA-only (Phase 1)        & 0.656 / 0.582 & 0.507 / 0.406 & 0.691 / 0.596 \\
+    SupCon-refined (Phase 2)   & 0.807 / 0.729 & 0.803 / 0.724 & 0.809 / 0.737 \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -277,8 +282,8 @@ Table~\ref{tab:ablation} isolates each component by removing it from the full pi
     \toprule
     $k$ & 1 & 3 & 5 & 10 & 15 \\
     \midrule
-    Accuracy & 0.752 & 0.753 & 0.753 & 0.754 & 0.754 \\
-    Macro-F1 & 0.681 & 0.679 & 0.680 & 0.680 & 0.681 \\
+    Accuracy & 0.806 & 0.806 & 0.807 & 0.807 & 0.807 \\
+    Macro-F1 & 0.729 & 0.729 & 0.729 & 0.731 & 0.730 \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -287,7 +292,7 @@ Table~\ref{tab:ablation} isolates each component by removing it from the full pi
 Because feature extraction at inference mirrors the per-capture training pipeline exactly, Net-JEPA accepts raw `.pcap` uploads directly: a capture is parsed into flows, features are computed within the scope of that capture, and each flow is embedded and classified through the frozen $k$-NN. This end-to-end consistency removes the train-inference feature gap and is what enables deployment of the offline-trained model on unseen captures.
 
 \section{Conclusion}
-In this paper, we introduced Net-JEPA, a context-aware predictive architecture for encrypted network traffic classification. By leveraging a dual-branch encoder, VICReg pretraining, and $\alpha$-centered supervised contrastive learning, Net-JEPA learns discriminative embeddings directly from structural flow metadata. Under a capture-level train/test split it reaches 75.3\% accuracy with a macro-F1 of 0.680, while meeting the embedding-separation KPIs (intra-class cosine 0.87, inter-class cosine 0.13) and delivering real-time CPU inference (6.5\,ms per flow, p95). We further showed that ensuring consistency through per-capture host statistics is paramount for translating offline training into reliable real-world edge inference. The classes with overlapping metadata shapes-video conferencing, video on demand, and web browsing-remain the principal challenge and motivate our future work on richer packet-level features and more diverse captures.
+In this paper, we introduced Net-JEPA, a context-aware predictive architecture for encrypted network traffic classification. By leveraging a dual-branch encoder, VICReg pretraining, and $\alpha$-centered supervised contrastive learning, Net-JEPA learns discriminative embeddings directly from structural flow metadata. Under a capture-level train/test split it reaches 80.7\% accuracy with a macro-F1 of 0.729, while meeting the embedding-separation KPIs (intra-class cosine 0.89, inter-class cosine 0.05) and delivering real-time CPU inference (7\,ms per flow, p95). We showed that aligning the self-supervised objective with the pooled representation the classifier consumes is what makes predictive pretraining pay off (0.753 $\rightarrow$ 0.807), and that ensuring consistency through per-capture host statistics is paramount for translating offline training into reliable real-world edge inference. The classes with overlapping metadata shapes-video conferencing, video on demand, and web browsing-remain the principal challenge and motivate our future work on richer packet-level features and more diverse captures.
 
 \begin{thebibliography}{99}
 

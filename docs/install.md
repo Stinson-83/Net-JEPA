@@ -87,7 +87,7 @@ python -m netjepa.scripts.evaluate --config src/netjepa/configs/traffic.yaml \
 `--from-csvs` reconstructs each flow's tensors with the **same** feature functions used in
 training and honours the CSVs' recorded `split` (now a leak-free **capture-level** partition,
 keyed on `source_file`), so it reproduces the same 19,620 / 9,272 train/test split and KPIs:
-kNN **0.753**, macro-F1 **0.680**, silhouette **0.475**.
+kNN **0.807**, macro-F1 **0.729**, silhouette **0.552**.
 
 ### Way 2 — from scratch: train everything → see *Train from scratch* below.
 
@@ -150,7 +150,7 @@ python -m netjepa.scripts.train_phase2b --config $CFG \
 python -m netjepa.scripts.train_phase3  --config $CFG \
     --phase2_ckpt checkpoints/traffic8/phase2b/final.pt --ckpt_dir checkpoints/traffic8/phase3 --device cuda
 
-# 5. Evaluate against the test split  → kNN ~0.753, macro-F1 ~0.680, all KPIs
+# 5. Evaluate against the test split  → kNN ~0.807, macro-F1 ~0.729, all KPIs
 python -m netjepa.scripts.evaluate --config $CFG \
     --checkpoint checkpoints/traffic8/phase3/final.pt --device cuda
 

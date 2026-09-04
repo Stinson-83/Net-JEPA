@@ -19,9 +19,12 @@ Conventions used below: **Problem** (motivation), **Change** (what was done),
 > checks recorded below (sections 9 and 10) did **not** catch this split-level leak. The dataset
 > builder now splits **by capture session** (`GroupShuffleSplit` per class, grouping on
 > `source_file`), so all flows of a capture go entirely to train or entirely to test. This
-> supersedes the retired 70/70/30 numbers (accuracy 0.997 / macro-F1 0.992); the honest
-> leak-free figures are accuracy **0.753** / macro-F1 **0.680** (section 10 and
-> [results.md](results.md)).
+> supersedes the retired 70/70/30 numbers (accuracy 0.997 / macro-F1 0.992). The honest
+> leak-free figures without encoder-objective alignment were accuracy 0.753 / macro-F1 0.680
+> (section 10); with the encoder-objective alignment fix (section 14) the current headline
+> leak-free figures are accuracy **0.807** / macro-F1 **0.729** (section 14 and
+> [results.md](results.md)). The full progression is 0.997 (leaky) -> 0.753 (leak-free) ->
+> 0.807 (leak-free + aligned).
 
 ---
 
@@ -381,17 +384,71 @@ status emoji, and consolidated the experiment record into this log.
 
 ---
 
+## 14. Encoder-objective alignment — making JEPA pretraining help
+
+**Problem.** The original Phase-1 JEPA/VICReg pretraining did not actually help. A controlled
+ablation showed random-init SupCon reaching accuracy **0.788**, at or above JEPA-pretrained
+SupCon at **0.753** — i.e. the self-supervised stage was, at best, neutral and arguably a small
+regression. This directly contradicted the premise of section 2 (that pretraining learns useful
+structure the supervised stage builds on).
+
+**Root cause.** The VICReg objective was being applied to a *fused token representation that the
+downstream classifier discards*. The classifier consumes the mean-pooled temporal-encoder
+output, but VICReg was optimizing a different, fused-token path — so the two objectives were not
+aligned on the same representation. Worse, the covariance term on that path had collapsed
+(covariance ≈ **88**), meaning the pretrained features were highly redundant, and the DBSCAN
+auxiliary contrastive term was inert (it produced a single cluster and never activated). The
+pretext task was optimizing a representation the classifier never sees.
+
+**Change ("encoder-objective alignment").** Phase-1 now adds a VICReg invariance term computed
+on the **mean-pooled temporal-encoder output** — the exact path the classifier uses — between
+the degraded online view and the clean EMA-target view, plus a stronger covariance weight
+(`vicreg_gamma` raised 1 -> 10; config `loss.align_weight = 1.0`). The invariance is thus
+enforced on the representation that is actually carried forward, not on a discarded fused token.
+
+**Reason.** A self-supervised objective can only help the downstream task if it shapes the same
+representation the downstream task consumes. Aligning the VICReg invariance and covariance onto
+the mean-pooled encoder output makes the pretext gradient improve exactly the features the k-NN
+and SupCon stages later use; the stronger covariance weight breaks the redundancy collapse.
+
+**Result.** Covariance dropped **88 -> 2.8** (the redundancy collapse was resolved), and the
+DBSCAN auxiliary clustering now activates and contributes (it had been inert at 1 cluster). With
+the alignment in place, JEPA pretraining becomes a **net gain** rather than a wash: on the same
+leak-free capture-level split, accuracy rose **0.753 -> 0.807**, macro-F1 **0.680 -> 0.729**,
+weighted-F1 **0.764**, intra cosine **0.87 -> 0.893**, inter cosine **0.13 -> 0.050**,
+silhouette **0.475 -> 0.552**, few-shot (eta=7) **0.773 -> 0.803** — and few-shot is now stable
+across eta (±0.001) where it previously varied. Per-class F1 tops out at **0.974** (online
+gaming); the hard classes remain video conferencing **0.195** and video on demand **0.284** (the
+latter regressed slightly), with web browsing recovering to **0.753**.
+
+This ablation **supersedes** the earlier "JEPA doesn't help" finding (random-init SupCon 0.788 ≥
+JEPA-pretrained 0.753): that result held only because the pretext objective was misaligned with
+the classifier's representation. Once the objectives are aligned, pretraining helps as originally
+intended in section 2. The 0.753 figure recorded in section 10 is now the "leak-free **without**
+alignment" intermediate; 0.807 is the leak-free + aligned headline. The full progression is
+0.997 (leaky) -> 0.753 (leak-free) -> 0.807 (leak-free + aligned).
+
+Accuracy (**0.807**) and few-shot (**0.803**) still fall short of the ≥90% / ≥85% targets,
+though few-shot now clears 0.80. The remaining gap is a data-diversity limitation on the hard
+video classes rather than a pretraining-alignment one.
+
+---
+
 ## Final state (summary)
 
 - Model: 8 traffic types, self-supervised JEPA + traffic-type SupCon + alpha-centering, cosine
   k-NN classifier, full-supervision on a leak-free **capture-level 70/30 split**
   (`GroupShuffleSplit` on `source_file`; 111 captures, 73 train / 38 test, 0 shared; 28,892
   flows -> 19,620 train / 9,272 test).
-- KPIs (held-out test, leak-free): accuracy **0.753**, macro-F1 **0.680**, weighted-F1
-  **0.729**, intra cosine **0.87**, inter cosine **0.13**, silhouette **0.475**, few-shot
-  (eta=7) **0.773**, latency **6.5 ms/flow** on CPU (p95). Intra/inter cosine and latency still
-  clear their targets; **accuracy (0.753) and few-shot (0.773) no longer meet** their ≥90% /
-  ≥85% targets once capture-level leakage is removed.
+- KPIs (held-out test, leak-free + encoder-objective alignment): accuracy **0.807**, macro-F1
+  **0.729**, weighted-F1 **0.764**, intra cosine **0.89**, inter cosine **0.05**, silhouette
+  **0.552**, few-shot (eta=7) **0.803**, latency **~7 ms/flow** on CPU (p95). Intra/inter cosine
+  and latency clear their targets; **accuracy (0.807) and few-shot (0.803) still fall short** of
+  their ≥90% / ≥85% targets, though few-shot now clears 0.80. See section 14 for the alignment
+  fix that took accuracy 0.753 -> 0.807.
+- Progression: 0.997 (leaky, flow-level split) -> 0.753 (leak-free capture-level split,
+  section 10) -> 0.807 (leak-free + encoder-objective alignment, section 14). The 0.753 figure
+  is the leak-free result **without** alignment.
 - Correction: the retired 70/70/30 numbers (accuracy 0.997, macro-F1 0.992, few-shot 0.996)
   were inflated by capture-level leakage from a flow-level split; the "leak-free" same-capture
   exclusion checks (0.9767 / 0.9963) did not detect it. See section 10 and the 2026-08-28 note.

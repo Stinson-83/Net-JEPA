@@ -50,13 +50,13 @@ and generalization are not.
 
 | Benchmark KPI | Target | Achieved | How |
 |---|---|---|---|
-| Intra-class cosine | > 0.7 | **0.87** ✓ | Type SupCon on a kept, normalised embedding |
-| Inter-class cosine | < 0.3 | **0.13** ✓ | α-centering removes the anisotropic common-mode |
-| Accuracy | ≥ 90% | **75.3%** ✗ | Cosine k-NN on the isotropised embedding |
-| Generalization | ≥ 85% | **77.3%** ✗ | Few-shot (η=7, held-out flows) |
-| Real-time | < 100 ms | **6.5 ms** p95 (CPU) | Lightweight encoder, no GPU needed to serve |
+| Intra-class cosine | > 0.7 | **0.89** ✓ | Type SupCon on a kept, normalised embedding |
+| Inter-class cosine | < 0.3 | **0.05** ✓ | α-centering removes the anisotropic common-mode |
+| Accuracy | ≥ 90% | **80.7%** ✗ | Cosine k-NN on the isotropised embedding (encoder-aligned JEPA pretraining, 0.753 → 0.807) |
+| Generalization | ≥ 85% | **80.3%** ✗ | Few-shot (η=7, held-out flows) |
+| Real-time | < 100 ms | **~7 ms** p95 (CPU) | Lightweight encoder, no GPU needed to serve |
 
-Additionally, **macro-F1 0.680**, weighted-F1 **0.729**, and silhouette **0.475**. See
+Additionally, **macro-F1 0.729**, weighted-F1 **0.764**, and silhouette **0.552**. See
 [results.md](results.md) for per-class numbers, the per-capture-host-stats fix that drove
 them (an earlier flow-level split leaked shared per-capture host stats across train/test;
 the retired, leaky 99.7% accuracy came from that), and real-`.pcap` inference results.
@@ -72,6 +72,6 @@ the retired, leaky 99.7% accuracy came from that), and real-`.pcap` inference re
   inference (including per-capture host stats), so a raw browser YouTube capture is correctly
   classified as `video_on_demand`. See [results.md](results.md).
 - **Transparent evaluation** — the one known weak spot (single-flow snippets) is reported rather than omitted.
-- **Real-time on CPU** — ~3.3 ms/flow (p50), 6.5 ms p95, deployable at the edge.
+- **Real-time on CPU** — ~3.3 ms/flow (p50), ~7 ms p95, deployable at the edge.
 - **Interactive demonstration** — a live atlas of real flows; uploading a `.pcap` runs the model
   and classifies it. See [features.md](features.md).

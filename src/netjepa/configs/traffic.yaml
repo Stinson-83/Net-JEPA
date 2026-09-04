@@ -42,11 +42,12 @@ training:
 loss:
   vicreg_alpha: 25.0
   vicreg_beta: 25.0
-  vicreg_gamma: 1.0
+  vicreg_gamma: 10.0
   lambda1: 1.0
   lambda2: 0.3
   contrastive_margin: 0.5
   running_mean_window: 100
+  align_weight: 1.0
 augmentation:
   change_rtt_prob: 0.8
   change_rtt_alpha_min: 0.5

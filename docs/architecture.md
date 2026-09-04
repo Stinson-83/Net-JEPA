@@ -55,9 +55,9 @@ The downstream embedding is the component the cosine KPI measures, so it receive
    are both `video_on_demand`).
 4. **α-centering** (`set_centering`, α≈0.65): SupCon separates class *directions* but leaves
    them in a shared cone (high absolute cosine). Subtracting α·mean and re-normalising
-   isotropises the space, dropping inter-class cosine to ~0.13 (still well below 0.3) while intra stays ~0.87.
+   isotropises the space, dropping inter-class cosine to ~0.05 (still well below 0.3) while intra stays ~0.89.
 
-Classification is a **cosine k-NN (k=5)** over the labelled embeddings — 6.5 ms on CPU.
+Classification is a **cosine k-NN (k=5)** over the labelled embeddings — ~7 ms on CPU.
 
 ---
 

@@ -48,7 +48,7 @@ embedding to predict one of 8 traffic types.
 - **Supervised sharpening:** traffic-type-level **SupCon** on the kept embedding, then
   **α-centering** (common-mode removal, α≈0.65) to isotropise the space.
 - **Classifier:** cosine **k-NN (k=5)**.
-- **Size / speed:** ~1.76 M parameters; **~6.5 ms / flow on CPU (p95)** (no GPU needed to serve).
+- **Size / speed:** ~1.76 M parameters; **~7 ms / flow on CPU (p95)** (no GPU needed to serve).
 
 ### The eight traffic types
 
@@ -59,15 +59,16 @@ embedding to predict one of 8 traffic types.
 
 | Benchmark KPI | Target | Achieved |
 |---|---|---|
-| Intra-class cosine | > 0.7 | **0.87** |
-| Inter-class cosine | < 0.3 | **0.13** |
-| Classification accuracy | ≥ 90% | **75.3%** |
-| Generalization (few-shot, η=7) | ≥ 85% | **77.3%** |
-| Real-time latency / flow | < 100 ms | **6.5 ms** (CPU, p95) |
+| Intra-class cosine | > 0.7 | **0.89** |
+| Inter-class cosine | < 0.3 | **0.05** |
+| Classification accuracy | ≥ 90% | **80.7%** |
+| Generalization (few-shot, η=7) | ≥ 85% | **80.3%** |
+| Real-time latency / flow | < 100 ms | **~7 ms** (CPU, p95) |
 
-macro-F1 **0.680** · weighted-F1 **0.729** · silhouette **0.475**. Per-class F1 ranges from
-0.14 (video conferencing, the hardest class) to 0.99 (online gaming). Hard classes:
-video_conferencing 0.139, video_on_demand 0.369, web_browsing 0.609. Full numbers: see the
+macro-F1 **0.729** · weighted-F1 **0.764** · silhouette **0.552** (with encoder-aligned JEPA
+pretraining, which lifts accuracy 0.753 → 0.807). Per-class F1 ranges from 0.20 (video
+conferencing, the hardest class) to 0.97 (online gaming). Hard classes:
+video_conferencing 0.195, video_on_demand 0.284, web_browsing 0.753. Full numbers: see the
 repo's `docs/results.md`.
 
 ## How to use

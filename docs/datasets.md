@@ -27,7 +27,7 @@ pretraining **and** supervised SupCon + k-NN — train == pretrain == downstream
 **9,272 test** (~32%; held out for evaluation only). The split is over 111 capture sessions
 (**73 train / 38 test, 0 shared**), so it is **leak-free** — no capture spans train and test,
 which prevents the per-capture host-stat fingerprint from leaking across the split. Under this
-correct split accuracy is **0.753**; see [results.md](results.md).
+correct split accuracy is **0.807**; see [results.md](results.md).
 
 ## The three sources
 

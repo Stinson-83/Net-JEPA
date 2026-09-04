@@ -8,7 +8,7 @@
 > `source_file`) superseded the earlier **70/70/30** flow-level numbers cited below. It revealed
 > that the prior split leaked at the *capture* level — despite an eval-time "leak-free" k-NN
 > check we thought had ruled leakage out — so the retired **0.997** accuracy was inflated. The
-> honest leak-free accuracy is **0.753**. See [results.md](results.md) for the corrected
+> honest leak-free accuracy is **0.753**, and **0.807** after aligning the JEPA objective — see [results.md](results.md) for the corrected
 > canonical numbers; the passages below have been annotated accordingly.
 
 Net-JEPA was built by a human team (Team FlowState) working with **Claude Code** (Anthropic's
@@ -90,7 +90,8 @@ secrets are committed.
   neighbours at eval time* did not undo *capture-level leakage in the split itself*. A later,
   proper **capture-level `GroupShuffleSplit`** (grouping on `source_file`, so no capture is ever
   split across train and test) revealed the true leak-free accuracy is **0.753**, not 0.997
-  (see [results.md](results.md)). The honest lesson: a plausible-looking leak-free guard can
+  (see [results.md](results.md)); the current headline is **0.807** with encoder-aligned JEPA
+  pretraining. The honest lesson: a plausible-looking leak-free guard can
   still miss the real leak; only a split that partitions by the leaking group closed it.
 - **Root-cause over symptom.** See *What worked* below for the central example (per-capture
   host stats), and [experiments.md](experiments.md) for the full investigation log.
@@ -166,8 +167,12 @@ surface small and auditable was a deliberate choice, not an oversight.
   per-capture** — an unreproducible train/inference inconsistency. Fixing it lifted accuracy
   **0.86 → 0.977** and made real-pcap upload work. (That 0.977, and the later 0.997, were both
   measured on a *flow-level* split; the true leak-free accuracy under a capture-level split is
-  **0.753** — see [results.md](results.md).) The remaining weak spot (single-flow pcaps)
+  **0.807** — see [results.md](results.md).) The remaining weak spot (single-flow pcaps)
   is reported rather than hidden. Agentic tooling made the thorough path the cheap path.
+- **Turning JEPA pretraining from a no-op into a net gain.** Aligning the self-supervised JEPA
+  objective with the pooled encoder representation the classifier actually uses (plus a stronger
+  covariance weight) was the small architectural tweak that lifted the leak-free headline
+  **0.753 → 0.807**.
 - **Breadth without loss of focus.** The agent moved between PyTorch training, FastAPI serving,
   and a TypeScript/WebGL front-end while keeping the KPIs in view.
 - **Documentation and provenance as first-class artifacts** — kept in step with the code,

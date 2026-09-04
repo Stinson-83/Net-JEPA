@@ -42,6 +42,7 @@ def main():
         vicreg_alpha=loss_cfg['vicreg_alpha'],
         vicreg_beta=loss_cfg['vicreg_beta'],
         vicreg_gamma=loss_cfg['vicreg_gamma'],
+        align_weight=loss_cfg.get('align_weight', 0.0),
         lambda1=loss_cfg['lambda1'],
         lambda2=loss_cfg['lambda2'],
         dbscan_eps=tr_cfg['dbscan_eps'],

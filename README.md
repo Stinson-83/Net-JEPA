@@ -39,8 +39,9 @@
   params: encoder + fusion + predictor + EMA target + pooling + embedding head + α-centering) plus
   the fitted cosine k-NN (`knn.joblib`), config, `labels.json` (the 8 type names), and model card
   ([`docs/model-card.md`](docs/model-card.md)). Test KPIs (leak-free capture-level 70/30 split):
-  accuracy **75.3%**, macro-F1 **0.680** (the earlier 99.7% was inflated by capture-level
-  leakage — see [docs/results.md](docs/results.md)). Re-publishable from [`src/netjepa/scripts/publish_hf.py`](src/netjepa/scripts/publish_hf.py)
+  accuracy **80.7%**, macro-F1 **0.729** (with encoder-aligned JEPA pretraining; the earlier
+  99.7% was inflated by capture-level leakage — see [docs/results.md](docs/results.md)).
+  Re-publishable from [`src/netjepa/scripts/publish_hf.py`](src/netjepa/scripts/publish_hf.py)
   (`HF_TOKEN=… python src/netjepa/scripts/publish_hf.py --repo-id <user>/net-jepa`); checkpoint is
   also reproducible end-to-end from the training scripts.
 - **Datasets Used** -
@@ -82,7 +83,9 @@ We adapted these ideas to **encrypted network-flow classification** and added ou
 contributions: a packet-shape flow encoder with RTT/context fusion, the α-centering
 ("isotropisation") trick that meets the inter-class cosine KPI, category-level SupCon on a kept
 embedding, **per-capture host-stat features that are train/inference-consistent** (a
-train/serving-consistency fix that made real-`.pcap` upload classify correctly), and the
-"Signal Atlas" live demo. Under a leak-free capture-level split the model reaches **75.3%**
-accuracy (see [docs/results.md](docs/results.md)). All OSS libraries we build on are
+train/serving-consistency fix that made real-`.pcap` upload classify correctly), **encoder-aligned
+JEPA pretraining** (aligning the self-supervised objective with the pooled encoder the classifier
+uses, which lifts accuracy 0.753 → 0.807), and the "Signal Atlas" live demo. Under a leak-free
+capture-level split the model reaches **80.7%** accuracy (see [docs/results.md](docs/results.md)).
+All OSS libraries we build on are
 credited in [docs/tech-stack.md](docs/tech-stack.md).
